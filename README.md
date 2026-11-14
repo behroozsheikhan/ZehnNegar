@@ -74,8 +74,10 @@ npm run preview:web    # http://localhost:5173
 | `npm run test:db:node` | همان تست‌ها با Node معمولی (سریع، بدون Electron) |
 | `npm run test:e2e` | برنامهٔ واقعی با Playwright (در لینوکس زیر xvfb؛ اول `npm run build`) |
 
-در CI تست‌های e2e روی ویندوز هم روی **برنامهٔ بسته‌بندی‌شده** اجرا می‌شوند
-(`ZN_EXECUTABLE=release/win-unpacked/ZehnNegar.exe npx playwright test`).
+در CI روی ویندوز، نصب‌کننده واقعاً (بی‌صدا) نصب می‌شود و `scripts/ci-verify-installer.ps1`
+پرونده‌های برنامه، میان‌بر منوی شروع، ثبت در «حذف برنامه‌ها» و باز شدن پروندهٔ `.drawnix` با
+برنامهٔ نصب‌شده را بررسی می‌کند؛ سپس همین تست‌های e2e روی **برنامهٔ نصب‌شده** اجرا می‌شوند
+(`ZN_EXECUTABLE=<مسیر ZehnNegar.exe> npx playwright test`) و در پایان حذف برنامه هم آزموده می‌شود.
 
 ### ساختار
 
@@ -104,6 +106,8 @@ resources-build/     آیکن برنامه
 - **اندازه‌گیری متن فارسی:** Plait پهنای متن را حرف‌به‌حرف اندازه می‌گرفت که برای حروف چسبان
   فارسی غلط است؛ `scripts/patch-plait.mjs` (در `postinstall`) آن را با اندازه‌گیری متنِ شکل‌گرفته
   جایگزین می‌کند.
+- **گرهٔ ناخواسته:** در Plait اگر پس از انتخاب ابزار نقشهٔ ذهنی ابزار عوض می‌شد، کلیک بعدی باز
+  هم یک گره می‌ساخت؛ همان اسکریپت این را هم وصله می‌کند.
 - **قلم:** Vazirmatn نسخهٔ 33.003 (SIL OFL) درون برنامه بسته‌بندی شده است.
 - **Node 22 به‌جای 20:** Electron 45، better-sqlite3 13 و `@electron/rebuild` 4 به Node ≥ 22.12
   نیاز دارند.

@@ -423,5 +423,13 @@ describe('App', () => {
       expect(document.documentElement.dir).toBe('ltr');
       expect(document.documentElement.lang).toBe('en');
     });
+
+    it('پیامی که روی صفحه است با تغییر زبان ترجمه می‌شود', async () => {
+      await renderApp({ session: { content: createSampleDocument(), dirty: true } });
+      expect(screen.getByTestId('app-notice').textContent).toContain('بازیابی شد');
+      click('lang-en');
+      await waitFor(() => expect(screen.getByTestId('app-notice').textContent).toMatch(/restored/i));
+      expect(screen.getByTestId('app-notice').textContent).not.toMatch(/[\u0600-\u06FF]/);
+    });
   });
 });

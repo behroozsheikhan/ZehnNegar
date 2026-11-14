@@ -65,7 +65,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # نصب‌کنندهٔ ویندوز (NSIS x64) + آزمون برنامهٔ بسته‌بندی‌شده روی ویندوز واقعی
+  # نصب‌کنندهٔ ویندوز (NSIS x64) + نصب واقعی و آزمون برنامهٔ نصب‌شده روی ویندوز
   # ---------------------------------------------------------------------------
   build:
     runs-on: windows-latest
@@ -118,14 +118,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: End-to-end tests against the packaged app
-        env:
-          ZN_EXECUTABLE: release/win-unpacked/ZehnNegar.exe
+      # نصب بی‌صدا مثل کاربر: پرونده‌های برنامه، میان‌بر منوی شروع، ثبت در «حذف برنامه‌ها» و
+      # باز شدن پروندهٔ ‎.drawnix با برنامهٔ نصب‌شده. مسیر برنامه در ZN_EXECUTABLE گذاشته می‌شود.
+      - name: Install with the NSIS installer and verify the installation
+        shell: pwsh
+        run: ./scripts/ci-verify-installer.ps1 -Phase install
+
+      - name: End-to-end tests against the installed app
         run: npx playwright test
 
       - name: Report e2e failures
         if: failure()
         run: node scripts/ci-e2e-report.mjs
+
+      - name: Uninstall and verify nothing is left behind
+        shell: pwsh
+        run: ./scripts/ci-verify-installer.ps1 -Phase uninstall
 
       - name: Upload e2e report
         if: failure()

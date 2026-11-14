@@ -119,19 +119,14 @@ describe('منوی برنامه با میزبان دسکتاپ', () => {
 });
 
 describe('انتخاب زبان', () => {
-  it('فقط فارسی و انگلیسی؛ انتخاب به میزبان خبر داده می‌شود', () => {
+  it('فقط فارسی و انگلیسی؛ انتخاب به میزبان خبر داده می‌شود', async () => {
     const onLanguageChange = vi.fn();
     renderMenu(<LanguageSwitcherMenu />, { onLanguageChange });
     const trigger = screen.getByTestId('language-switcher-button');
     expect(trigger.textContent).toContain('زبان');
-    fireEvent.pointerEnter(trigger);
+    // زیرمنو با رفتن نشانگر روی گزینه باز می‌شود (کلیک آن را باز/بسته می‌کند).
     fireEvent.mouseEnter(trigger);
-    fireEvent.click(trigger);
-    const english = screen.queryByTestId('language-en');
-    if (!english) {
-      // زیرمنو در jsdom فقط با hover واقعی باز می‌شود؛ رفتار کامل در e2e آزموده می‌شود.
-      return;
-    }
+    const english = await screen.findByTestId('language-en');
     expect(screen.getByTestId('language-fa').textContent).toContain('فارسی');
     expect(screen.queryByTestId('language-zh')).toBeNull();
     fireEvent.click(english);

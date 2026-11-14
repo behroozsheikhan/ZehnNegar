@@ -19,7 +19,7 @@ import {
   type ZehnApi,
 } from '@shared/ipc';
 import { AboutDialog } from './components/AboutDialog';
-import { Notice, type NoticeData, type NoticeKind } from './components/Notice';
+import { Notice, type NoticeKind } from './components/Notice';
 import { RecentFilesDialog } from './components/RecentFilesDialog';
 import {
   fileDisplayName,
@@ -29,7 +29,7 @@ import {
   type BoardSnapshot,
 } from './document';
 import { commandForShortcut, isEditableTarget } from './shortcuts';
-import { getStrings } from './strings';
+import { getStrings, type AppStrings } from './strings';
 
 interface LoadedDocument extends BoardDocument {
   /** با هر بار باز کردن/ساختن سند عوض می‌شود تا تخته از نو ساخته شود (تاریخچهٔ واگرد هم پاک شود). */
@@ -37,6 +37,16 @@ interface LoadedDocument extends BoardDocument {
 }
 
 type DialogKind = 'about' | 'recent' | null;
+
+/** متن پیام تابعی از متن‌های زبان فعلی است، نه رشتهٔ ثابت. */
+type NoticeMessage = (strings: AppStrings) => string;
+
+interface PendingNotice {
+  id: number;
+  kind: NoticeKind;
+  message: NoticeMessage;
+  detail?: string;
+}
 
 const DRAFT_DELAY_MS = 600;
 const SETTINGS_DELAY_MS = 400;
@@ -53,7 +63,8 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
-  const [notice, setNotice] = useState<NoticeData | null>(null);
+  // متن پیام هنگام نمایش از روی زبان فعلی ساخته می‌شود تا با تغییر زبان، پیامِ روی صفحه هم عوض شود.
+  const [notice, setNotice] = useState<PendingNotice | null>(null);
 
   const language: UiLanguage = settings.language;
   const strings = useMemo(() => getStrings(language), [language]);
@@ -76,14 +87,14 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
   const noticeIdRef = useRef(0);
 
   // ---------- پیام‌ها ----------
-  const showNotice = useCallback((kind: NoticeKind, message: string, detail?: string) => {
+  const showNotice = useCallback((kind: NoticeKind, message: NoticeMessage, detail?: string) => {
     noticeIdRef.current += 1;
     setNotice({ id: noticeIdRef.current, kind, message, detail });
   }, []);
 
   const showFileError = useCallback(
     (code: FileErrorCode, filePath?: string) => {
-      showNotice('error', stringsRef.current.notice.errors[code], filePath);
+      showNotice('error', (s) => s.notice.errors[code], filePath);
     },
     [showNotice]
   );
@@ -171,7 +182,7 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
         savedContentRef.current = content;
         syncDocumentState();
         await flushDraft();
-        showNotice('success', stringsRef.current.notice.saved, result.filePath);
+        showNotice('success', (s) => s.notice.saved, result.filePath);
         return true;
       }
       if (result.status === 'error') {
@@ -238,7 +249,7 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
     async (format: ExportFormat) => {
       const board = boardRef.current;
       if (!board || board.children.length === 0) {
-        showNotice('info', stringsRef.current.notice.emptyExport);
+        showNotice('info', (s) => s.notice.emptyExport);
         return;
       }
       let blob: Blob | null = null;
@@ -248,14 +259,14 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
         blob = null;
       }
       if (!blob) {
-        showNotice('error', stringsRef.current.notice.exportFailed);
+        showNotice('error', (s) => s.notice.exportFailed);
         return;
       }
       const data = new Uint8Array(await blob.arrayBuffer());
       const suggestedName = fileDisplayName(filePathRef.current, stringsRef.current.untitled);
       const result = await api.exportFile({ format, data, suggestedName });
       if (result.status === 'ok') {
-        showNotice('success', stringsRef.current.notice.exported, result.filePath);
+        showNotice('success', (s) => s.notice.exported, result.filePath);
       } else if (result.status === 'error') {
         showFileError(result.code);
       }
@@ -396,7 +407,6 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
         return;
       }
       setSettings(loadedSettings);
-      const s = getStrings(loadedSettings.language);
       const parsed = session.content ? parseDocument(session.content) : null;
 
       if (session.openedFromArgs && !session.error && parsed) {
@@ -404,7 +414,7 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
       } else if (parsed && session.dirty) {
         loadDocument(parsed, session.filePath, { dirty: true });
         if (parsed.children.length > 0) {
-          showNotice('info', s.notice.restored);
+          showNotice('info', (s) => s.notice.restored);
         }
       } else if (session.filePath) {
         // سندِ ذخیره‌شده: نسخهٔ روی دیسک مرجع است.
@@ -418,7 +428,7 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
         } else if (parsed && parsed.children.length > 0) {
           // پرونده دیگر در دسترس نیست؛ آخرین پیش‌نویس تنها نسخهٔ موجود است.
           loadDocument(parsed, null, { dirty: true });
-          showNotice('error', s.notice.errors['not-found'], session.filePath);
+          showNotice('error', (s) => s.notice.errors['not-found'], session.filePath);
         } else {
           loadDocument(EMPTY_DOCUMENT, null);
         }
@@ -429,7 +439,8 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
       }
 
       if (session.error) {
-        showNotice('error', s.notice.errors[session.error]);
+        const code = session.error;
+        showNotice('error', (s) => s.notice.errors[code]);
       }
       setReady(true);
     };
@@ -569,7 +580,7 @@ export function App({ api }: { api: ZehnApi }): React.JSX.Element {
       {notice && (
         <Notice
           key={`notice-${notice.id}`}
-          notice={notice}
+          notice={{ id: notice.id, kind: notice.kind, message: notice.message(strings), detail: notice.detail }}
           closeLabel={strings.close}
           onDismiss={() => setNotice(null)}
         />
