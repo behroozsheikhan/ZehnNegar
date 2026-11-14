@@ -1,0 +1,122 @@
+.drawnix-tutorial {
+  font-family: var(--zn-font-ui, 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif);
+  position: fixed;
+  top: 0;
+  inset-inline-start: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-color: transparent;
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: #888;
+    line-height: 1.5;
+  }
+
+  .tutorial-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .tutorial-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .brand-title {
+    font-size: 72px;
+    font-weight: 400;
+    color: #333;
+    margin: 0;
+    margin-bottom: 25px;
+  }
+
+  .brand-description {
+    font-size: 18px;
+    color: #333;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.6;
+    margin-bottom: 25px;
+  }
+
+  .brand-tooltip {
+    color: #888;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.6;
+    margin-bottom: 40px;
+  }
+
+  .feature-pointer {
+    position: absolute;
+  }
+
+  // پیکان‌های راهنما جهت‌دارند؛ در راست‌به‌چپ آینه می‌شوند.
+  &:dir(rtl) .pointer-arrow-svg {
+    transform: scaleX(-1);
+  }
+
+  .top-left {
+    position: absolute;
+    top: 100px;
+    inset-inline-start: 60px;
+    .pointer-content {
+      position: absolute;
+      top: 100px;
+      width: max-content;
+      max-width: 280px;
+      inset-inline-start: 20px;
+    }
+  }
+
+  .top-center {
+    top: 100px;
+    inset-inline: 0;
+    margin-inline: auto;
+    width: 200px;
+    .pointer-content {
+      position: absolute;
+      width: max-content;
+      max-width: 280px;
+      top: 50px;
+      inset-inline-start: 60px;
+    }
+  }
+
+  .bottom-right {
+    bottom: 70px;
+    inset-inline-end: 40px;
+    .pointer-content {
+      position: absolute;
+      top: -30px;
+      inset-inline-end: 80px;
+      width: max-content;
+      max-width: 280px;
+    }
+  }
+}
+
+@media screen and (max-width: 768px){
+  .drawnix-tutorial {
+    .tutorial-content {
+      width: 95%;
+      height: 95%;
+    }
+    
+    .feature-pointer {
+      display: none;
+    }
+  }
+}
