@@ -85,7 +85,7 @@ export const buildDrawnixHotkeyPlugin = (
           return;
         }
         if (isModCode(event, 'KeyU') && !event.shiftKey) {
-          addImage(board);
+          void addImage(board);
           event.preventDefault();
           return;
         }

@@ -77,6 +77,7 @@ const faTranslations: Translations = {
   'toast.copyToClipboard.svg': 'موارد انتخاب‌شده به‌صورت SVG در کلیپ‌بورد کپی شد',
   'toast.copyToClipboard.png': 'موارد انتخاب‌شده به‌صورت PNG در کلیپ‌بورد کپی شد',
   'toast.copyToClipboard.mode.transparent': '(با پس‌زمینهٔ شفاف)',
+  'toast.imageInsertFailed': 'این پرونده تصویرِ قابل‌خواندن نیست و درج نشد',
   // Language
   'language.switcher': 'زبان',
   'language.persian': 'فارسی',
@@ -178,6 +179,10 @@ const faTranslations: Translations = {
   // Mind map elements text
   'mind.centralText': 'موضوع اصلی',
   'mind.abstractNodeText': 'خلاصه',
+  'mind.direction': 'جهت شاخه‌ها',
+  'mind.direction.left': 'شاخه‌ها به سمت چپ',
+  'mind.direction.right': 'شاخه‌ها به سمت راست',
+  'mind.direction.down': 'شاخه‌ها به سمت پایین',
 
   'tutorial.title': 'ذهن‌نگار',
   'tutorial.description': 'تخته‌سفید همه‌کاره برای نقشهٔ ذهنی، فلوچارت، طراحی آزاد و …',

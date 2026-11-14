@@ -74,6 +74,7 @@ const enTranslations: Translations = {
   'toast.copyToClipboard.svg': 'Copied selected items as SVG to clipboard',
   'toast.copyToClipboard.png': 'Copied selected items as PNG to clipboard',
   'toast.copyToClipboard.mode.transparent': '(Transparent background)',
+  'toast.imageInsertFailed': 'This file is not a readable image and was not inserted',
   // Language
   'language.switcher': 'Language',
   'language.persian': 'فارسی',
@@ -174,6 +175,10 @@ const enTranslations: Translations = {
   // Mind map elements text
   'mind.centralText': 'Central Topic',
   'mind.abstractNodeText': 'Summary',
+  'mind.direction': 'Branch direction',
+  'mind.direction.left': 'Branches to the left',
+  'mind.direction.right': 'Branches to the right',
+  'mind.direction.down': 'Branches downward',
 
   'tutorial.title': 'ZehnNegar',
   'tutorial.description':

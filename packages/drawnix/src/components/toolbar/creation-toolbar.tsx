@@ -417,7 +417,7 @@ export const CreationToolbar = () => {
                   updateToolState({ pointer: button.pointer });
                 }
                 if (button.key === 'image') {
-                  addImage(board);
+                  void addImage(board);
                 }
               }}
             />

@@ -11,7 +11,7 @@ import {
   WritableClipboardOperationType,
 } from '@plait/core';
 import { isSupportedImageFileType } from '../data/blob';
-import { insertImage } from '../data/image';
+import { insertImageFile } from '../utils/image';
 import { isHitImage, MindElement, ImageData } from '@plait/mind';
 import { ImageViewer } from '../libs/image-viewer';
 
@@ -32,7 +32,7 @@ export const withImagePlugin = (board: PlaitBoard) => {
   ) => {
     if (clipboardData?.files?.length && isSupportedImageFileType(clipboardData.files[0].type)) {
       const imageFile = clipboardData.files[0];
-      insertImage(board, imageFile, targetPoint, false);
+      void insertImageFile(board, imageFile, targetPoint, false);
       return;
     }
     insertFragment(clipboardData, targetPoint, operationType);
@@ -43,7 +43,7 @@ export const withImagePlugin = (board: PlaitBoard) => {
       const imageFile = event.dataTransfer.files[0];
       if (isSupportedImageFileType(imageFile.type)) {
         const point = toViewBoxPoint(board, toHostPoint(board, event.x, event.y));
-        insertImage(board, imageFile, point, true);
+        void insertImageFile(board, imageFile, point, true);
         return true;
       }
     }

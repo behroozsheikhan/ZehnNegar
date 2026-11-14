@@ -1,6 +1,6 @@
-import { getSelectedElements, PlaitBoard, toSvgData } from '@plait/core';
-import { base64ToBlob, boardToImage, download } from './common';
-import { fileOpen } from '../data/filesystem';
+import { getSelectedElements, PlaitBoard, type Point } from '@plait/core';
+import { base64ToBlob, boardToImage, boardToSvgData, download } from './common';
+import { pickFile } from '../data/pick-file';
 import { IMAGE_MIME_TYPES } from '../constants';
 import { insertImage } from '../data/image';
 import { getBackgroundColor } from './color';
@@ -80,7 +80,7 @@ const showCopySuccessToast = (
 const getSvgBlob = async (board: PlaitBoard, isTransparent: boolean, elements?: ExportElements) => {
   const backgroundColor = getBackgroundColor(board) || 'white';
   const fillStyle = isTransparent ? TRANSPARENT : backgroundColor;
-  const svgData = await toSvgData(board, {
+  const svgData = await boardToSvgData(board, {
     fillStyle,
     padding: 20,
     ratio: 4,
@@ -216,10 +216,40 @@ export const copySelectionAsPng = async (board: PlaitBoard) => {
   showCopySuccessToast(board, 'png', copyTransparent);
 };
 
-export const addImage = async (board: PlaitBoard) => {
-  const imageFile = await fileOpen({
-    description: 'Image',
-    extensions: Object.keys(IMAGE_MIME_TYPES) as (keyof typeof IMAGE_MIME_TYPES)[],
-  });
-  insertImage(board, imageFile);
+/** مقدار accept برای انتخاب تصویر: هم نوع MIME و هم پسوند (‎.jpg و ‎.jpeg هر دو). */
+export const IMAGE_ACCEPT = [
+  ...Object.values(IMAGE_MIME_TYPES),
+  ...Object.keys(IMAGE_MIME_TYPES).map((extension) => `.${extension}`),
+  '.jpeg',
+].join(',');
+
+/**
+ * تصویر را درج می‌کند و اگر پرونده تصویرِ خواندنی نباشد، به‌جای شکستِ بی‌صدا پیام می‌دهد.
+ */
+export const insertImageFile = async (
+  board: PlaitBoard,
+  imageFile: File,
+  startPoint?: Point,
+  isDrop?: boolean
+): Promise<boolean> => {
+  try {
+    await insertImage(board, imageFile, startPoint, isDrop);
+    return true;
+  } catch (error) {
+    console.error('Failed to insert the image:', error);
+    const { t } = i18nInsidePlaitHook(board);
+    (board as DrawnixBoard).showToast?.({
+      type: 'error',
+      message: t('toast.imageInsertFailed'),
+    });
+    return false;
+  }
+};
+
+export const addImage = async (board: PlaitBoard): Promise<boolean> => {
+  const imageFile = await pickFile({ accept: IMAGE_ACCEPT });
+  if (!imageFile) {
+    return false;
+  }
+  return insertImageFile(board, imageFile);
 };

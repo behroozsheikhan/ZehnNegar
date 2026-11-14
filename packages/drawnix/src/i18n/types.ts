@@ -78,6 +78,7 @@ export interface Translations {
   'toast.copyToClipboard.svg': string;
   'toast.copyToClipboard.png': string;
   'toast.copyToClipboard.mode.transparent': string;
+  'toast.imageInsertFailed': string;
 
   // Language
   'language.switcher': string;
@@ -162,6 +163,10 @@ export interface Translations {
   // Mind map elements text
   'mind.centralText': string;
   'mind.abstractNodeText': string;
+  'mind.direction': string;
+  'mind.direction.left': string;
+  'mind.direction.right': string;
+  'mind.direction.down': string;
 
   'tutorial.title': string;
   'tutorial.description': string;
