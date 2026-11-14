@@ -1,0 +1,67 @@
+import { type PlaitTextBoard, type RenderComponentRef, type TextProps } from '@plait/common';
+import type { PlaitBoard } from '@plait/core';
+import { createRoot } from 'react-dom/client';
+import { Text } from '@plait-board/react-text';
+import { Editor } from 'slate';
+import { ReactEditor } from 'slate-react';
+import { takeTypedText } from './typed-text';
+import type { ReactBoard } from './board';
+
+export const withReact = (board: PlaitBoard & PlaitTextBoard) => {
+  const newBoard = board as PlaitBoard & PlaitTextBoard & ReactBoard;
+
+  newBoard.renderText = (container: Element | DocumentFragment, props: TextProps) => {
+    const root = createRoot(container);
+    let currentEditor: ReactEditor;
+    const text = (
+      <Text
+        {...props}
+        afterInit={(editor) => {
+          currentEditor = editor as ReactEditor;
+          props.afterInit?.(editor);
+        }}
+      ></Text>
+    );
+    root.render(text);
+    let newProps = { ...props };
+    const ref: RenderComponentRef<TextProps> = {
+      destroy: () => {
+        setTimeout(() => {
+          root.unmount();
+        }, 0);
+      },
+      update: (updatedProps: Partial<TextProps>) => {
+        const hasUpdated =
+          updatedProps &&
+          newProps &&
+          !Object.keys(updatedProps).every(
+            (key) => updatedProps[key as keyof TextProps] === newProps[key as keyof TextProps]
+          );
+        if (!hasUpdated) {
+          return;
+        }
+        const readonly = ReactEditor.isReadOnly(currentEditor);
+        newProps = { ...newProps, ...updatedProps };
+        root.render(<Text {...newProps}></Text>);
+
+        if (readonly === true && newProps.readonly === false) {
+          setTimeout(() => {
+            ReactEditor.focus(currentEditor);
+            // نویسه‌هایی که پیش از فوکوس تایپ شده‌اند (شروع ویرایش با تایپ) درج می‌شوند؛
+            // چون کل متن انتخاب شده است، جایگزین متن قبلی می‌شوند.
+            const typed = takeTypedText(newBoard);
+            if (typed) {
+              Editor.insertText(currentEditor as unknown as Editor, typed);
+            }
+          }, 100);
+        } else if (readonly === false && newProps.readonly === true) {
+          ReactEditor.blur(currentEditor);
+          ReactEditor.deselect(currentEditor);
+        }
+      },
+    };
+    return ref;
+  };
+
+  return newBoard;
+};

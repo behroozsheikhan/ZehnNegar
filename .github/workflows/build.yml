@@ -1,0 +1,208 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Electron 45 و @electron/rebuild 4 به Node >= 22.12 نیاز دارند.
+  NODE_VERSION: 22
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # lint + تست‌های واحد + تست دیتابیس درون Electron + تست e2e (لینوکس، xvfb)
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bootstrap (system libraries, npm ci, native module check)
+        run: bash scripts/bootstrap.sh
+
+      - name: Lint, RTL CSS guard and type check
+        run: npm run lint
+
+      - name: Unit and UI tests
+        run: npm test
+
+      - name: Database tests inside Electron
+        run: npm run test:db
+
+      - name: Build
+        run: npm run build
+
+      - name: End-to-end tests (Electron under xvfb)
+        id: e2e
+        run: npm run test:e2e
+
+      - name: Report e2e failures
+        if: failure() && steps.e2e.outcome == 'failure'
+        run: node scripts/ci-e2e-report.mjs
+
+      - name: Upload e2e report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report-linux
+          path: |
+            playwright-report
+            test-results
+            e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # نصب‌کنندهٔ ویندوز (NSIS x64) + نصب واقعی و آزمون برنامهٔ نصب‌شده روی ویندوز
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Database tests inside Electron (Windows binary of better-sqlite3)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron ./node_modules/vitest/vitest.mjs run --dir src/main/db
+
+      - name: Build
+        run: npm run build
+
+      - name: Package installer (NSIS x64)
+        run: npm run pack:win
+
+      - name: Verify package contents
+        run: |
+          set -euo pipefail
+          ls -la release
+          unpacked="release/win-unpacked"
+          test -f "$unpacked/ZehnNegar.exe"
+          # ماژول نیتیو بیرون از asar و فقط باینری ویندوز x64
+          ls "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds"
+          test -f "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node"
+          test "$(ls "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds" | wc -l)" -eq 1
+          # فقط بسته‌های زبان فارسی و انگلیسی
+          ls "$unpacked/locales"
+          test -f "$unpacked/locales/fa.pak"
+          test -f "$unpacked/locales/en-US.pak"
+          test "$(ls "$unpacked/locales" | wc -l)" -eq 2
+          ls release/*.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: ZehnNegar-windows-x64
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      # نصب بی‌صدا مثل کاربر: پرونده‌های برنامه، میان‌بر منوی شروع، ثبت در «حذف برنامه‌ها» و
+      # باز شدن پروندهٔ ‎.drawnix با برنامهٔ نصب‌شده. مسیر برنامه در ZN_EXECUTABLE گذاشته می‌شود.
+      - name: Install with the NSIS installer and verify the installation
+        shell: pwsh
+        run: ./scripts/ci-verify-installer.ps1 -Phase install
+
+      - name: End-to-end tests against the installed app
+        id: e2e
+        run: npx playwright test
+
+      - name: Report e2e failures
+        if: failure() && steps.e2e.outcome == 'failure'
+        run: node scripts/ci-e2e-report.mjs
+
+      - name: Uninstall and verify nothing is left behind
+        shell: pwsh
+        run: ./scripts/ci-verify-installer.ps1 -Phase uninstall
+
+      - name: Upload e2e report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report-windows
+          path: |
+            playwright-report
+            test-results
+            e2e-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # انتشار در GitHub Releases: فقط وقتی برچسب نسخه (مثل v1.0.0) فرستاده شود و فقط پس از
+  # موفقیت هر دو کار بالا. همان نصب‌کننده‌ای منتشر می‌شود که روی ویندوز نصب و آزموده شده است.
+  # ---------------------------------------------------------------------------
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag matches the app version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error title=release::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Download the tested installer
+        uses: actions/download-artifact@v8
+        with:
+          name: ZehnNegar-windows-x64
+          path: release-assets
+
+      - name: Checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          test -f "ZehnNegar-Setup-$VERSION-x64.exe"
+          sha256sum -- *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -la
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          notes="docs/releases/$tag.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # اجرای دوباره برای همان برچسب: فقط پرونده‌ها جایگزین می‌شوند.
+            gh release upload "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt --clobber
+          elif [ -f "$notes" ]; then
+            gh release create "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt \
+              --verify-tag --title "ZehnNegar $VERSION" --notes-file "$notes"
+          else
+            gh release create "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt \
+              --verify-tag --title "ZehnNegar $VERSION" --generate-notes
+          fi
+          echo "::notice title=release::$(gh release view "$tag" --json url,assets --jq '.url + " | " + ([.assets[] | .name + " (" + (.size | tostring) + " bytes)"] | join(", "))')"

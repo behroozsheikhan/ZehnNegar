@@ -1,0 +1,433 @@
+/**
+ * ابزار مشترک تست‌های e2e: اجرای برنامهٔ واقعی با پوشهٔ دادهٔ موقت و جایگزینی
+ * پنجره‌های گفت‌وگوی نیتیو (که Playwright نمی‌تواند با آن‌ها کار کند).
+ */
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
+import {
+  _electron as electron,
+  test as base,
+  expect,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
+
+const ROOT = resolve(__dirname, '..');
+
+/**
+ * به‌طور پیش‌فرض خروجی `npm run build` با Electron توسعه اجرا می‌شود.
+ * با ZN_EXECUTABLE می‌توان همین تست‌ها را روی برنامهٔ بسته‌بندی‌شده اجرا کرد
+ * (مثلاً release/win-unpacked/ZehnNegar.exe در CI ویندوز).
+ */
+const PACKAGED_EXECUTABLE = process.env.ZN_EXECUTABLE ? resolve(ROOT, process.env.ZN_EXECUTABLE) : undefined;
+
+export interface LaunchOptions {
+  /** آرگومان‌های اضافه (مثلاً مسیر پرونده‌ای که با دوبارکلیک باز شده). */
+  args?: string[];
+}
+
+export interface RunningApp {
+  app: ElectronApplication;
+  page: Page;
+  /** بستن عادی برنامه (پنجره بسته می‌شود و فرایند تمام می‌شود). */
+  close(): Promise<void>;
+}
+
+export interface DialogCall {
+  kind: 'open' | 'save' | 'message';
+  title?: string;
+  message?: string;
+  defaultPath?: string;
+  buttons?: string[];
+}
+
+interface Fixtures {
+  /** پوشهٔ دادهٔ برنامه (دیتابیس)؛ برای هر تست تازه است. */
+  userData: string;
+  /** پوشهٔ موقت برای پرونده‌های کاربر. */
+  workDir: string;
+  launch: (options?: LaunchOptions) => Promise<RunningApp>;
+}
+
+export const test = base.extend<Fixtures>({
+  // eslint-disable-next-line no-empty-pattern
+  userData: async ({}, use) => {
+    const dir = mkdtempSync(join(tmpdir(), 'zehnnegar-data-'));
+    await use(dir);
+    rmSync(dir, { recursive: true, force: true });
+  },
+
+  // eslint-disable-next-line no-empty-pattern
+  workDir: async ({}, use) => {
+    // نام پوشه عمداً فارسی و فاصله‌دار است.
+    const dir = mkdtempSync(join(tmpdir(), 'پرونده‌های من '));
+    await use(dir);
+    rmSync(dir, { recursive: true, force: true });
+  },
+
+  launch: async ({ userData }, use) => {
+    const running: RunningApp[] = [];
+
+    await use(async (options = {}) => {
+      const env: Record<string, string> = {};
+      for (const [key, value] of Object.entries(process.env)) {
+        // NODE_OPTIONS محیط توسعه نباید به Electron برسد.
+        if (value !== undefined && key !== 'NODE_OPTIONS' && key !== 'ELECTRON_RUN_AS_NODE') {
+          env[key] = value;
+        }
+      }
+      env.APP_USER_DATA = userData;
+
+      const extraArgs = options.args ?? [];
+      const app = await electron.launch(
+        PACKAGED_EXECUTABLE
+          ? { executablePath: PACKAGED_EXECUTABLE, args: extraArgs, env }
+          : { cwd: ROOT, args: ['.', '--no-sandbox', '--disable-gpu', ...extraArgs], env }
+      );
+
+      // خروجی فرایند اصلی و خطاهای renderer در گزارش تستِ ناموفق دیده می‌شود.
+      app.process().stderr?.on('data', (chunk: Buffer) => process.stderr.write(`[main] ${chunk.toString()}`));
+      app.on('window', (window) => {
+        window.on('pageerror', (error) => process.stderr.write(`[renderer] ${error.message}\n`));
+        window.on('console', (message) => {
+          if (message.type() === 'error') process.stderr.write(`[console] ${message.text()}\n`);
+        });
+      });
+
+      // پیش‌فرض امن: هیچ پنجرهٔ نیتیوی باز نمی‌ماند (انصراف / «ذخیره نکن»).
+      await app.evaluate(({ dialog }) => {
+        const calls: unknown[] = [];
+        const state = {
+          calls,
+          openPath: null as string | null,
+          savePath: null as string | null,
+          messageResponse: 1,
+        };
+        (globalThis as Record<string, unknown>).__dialogs = state;
+        const optionsOf = (args: unknown[]): Record<string, unknown> =>
+          (args.length > 1 ? args[1] : args[0]) as Record<string, unknown>;
+        dialog.showOpenDialog = (async (...args: unknown[]) => {
+          calls.push({ kind: 'open', title: optionsOf(args).title });
+          return state.openPath
+            ? { canceled: false, filePaths: [state.openPath] }
+            : { canceled: true, filePaths: [] };
+        }) as typeof dialog.showOpenDialog;
+        dialog.showSaveDialog = (async (...args: unknown[]) => {
+          const o = optionsOf(args);
+          calls.push({ kind: 'save', title: o.title, defaultPath: o.defaultPath });
+          return state.savePath ? { canceled: false, filePath: state.savePath } : { canceled: true, filePath: '' };
+        }) as typeof dialog.showSaveDialog;
+        dialog.showMessageBox = (async (...args: unknown[]) => {
+          const o = optionsOf(args);
+          calls.push({ kind: 'message', message: o.message, buttons: o.buttons });
+          return { response: state.messageResponse, checkboxChecked: false };
+        }) as typeof dialog.showMessageBox;
+      });
+
+      const page = await app.firstWindow();
+      await page.getByTestId('app-root').waitFor({ timeout: 30_000 });
+
+      const instance: RunningApp = {
+        app,
+        page,
+        close: async () => {
+          const exited = app.waitForEvent('close', { timeout: 20_000 }).catch(() => undefined);
+          await app
+            .evaluate(({ BrowserWindow }) => {
+              BrowserWindow.getAllWindows()[0]?.close();
+            })
+            .catch(() => undefined);
+          await exited;
+        },
+      };
+      running.push(instance);
+      return instance;
+    });
+
+    for (const instance of running) {
+      // خروج قطعی (بدون پرسش «ذخیره شود؟»)؛ اگر برنامه قبلاً بسته شده باشد خطا نادیده گرفته می‌شود.
+      await instance.app.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
+      await instance.app.close().catch(() => undefined);
+    }
+  },
+});
+
+export { expect };
+
+// ---------- پنجره‌های نیتیو ----------
+
+export async function setSavePath(app: ElectronApplication, filePath: string | null): Promise<void> {
+  await app.evaluate((_electron, value) => {
+    (globalThis as unknown as { __dialogs: { savePath: string | null } }).__dialogs.savePath = value;
+  }, filePath);
+}
+
+export async function setOpenPath(app: ElectronApplication, filePath: string | null): Promise<void> {
+  await app.evaluate((_electron, value) => {
+    (globalThis as unknown as { __dialogs: { openPath: string | null } }).__dialogs.openPath = value;
+  }, filePath);
+}
+
+/** پاسخ پنجرهٔ «تغییرات ذخیره شود؟»: ۰ = ذخیره، ۱ = ذخیره نکن، ۲ = انصراف. */
+export async function setUnsavedResponse(app: ElectronApplication, response: 0 | 1 | 2): Promise<void> {
+  await app.evaluate((_electron, value) => {
+    (globalThis as unknown as { __dialogs: { messageResponse: number } }).__dialogs.messageResponse = value;
+  }, response);
+}
+
+export async function dialogCalls(app: ElectronApplication): Promise<DialogCall[]> {
+  return app.evaluate(
+    () => (globalThis as unknown as { __dialogs: { calls: DialogCall[] } }).__dialogs.calls
+  );
+}
+
+// ---------- پنجره و منو ----------
+
+export async function windowTitle(app: ElectronApplication): Promise<string> {
+  return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle() ?? '');
+}
+
+/** برچسب‌های منوی نیتیو (سطح اول). */
+export async function nativeMenuLabels(app: ElectronApplication): Promise<string[]> {
+  return app.evaluate(({ Menu }) => (Menu.getApplicationMenu()?.items ?? []).map((item) => item.label));
+}
+
+/** همهٔ برچسب‌های یک زیرمنوی نیتیو. */
+export async function nativeSubmenuLabels(app: ElectronApplication, index: number): Promise<string[]> {
+  return app.evaluate(({ Menu }, i) => {
+    const collect = (items: Electron.MenuItem[]): string[] =>
+      items.flatMap((item) => [
+        ...(item.type === 'separator' ? [] : [item.label]),
+        ...(item.submenu ? collect(item.submenu.items) : []),
+      ]);
+    const top = Menu.getApplicationMenu()?.items[i];
+    return top?.submenu ? collect(top.submenu.items) : [];
+  }, index);
+}
+
+/** کلیک روی یک مورد منوی نیتیو با شناسه‌اش. */
+export async function clickNativeMenu(app: ElectronApplication, id: string): Promise<void> {
+  await app.evaluate(({ Menu, BrowserWindow }, itemId) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+    if (!item) {
+      throw new Error(`menu item not found: ${itemId}`);
+    }
+    item.click(undefined, BrowserWindow.getAllWindows()[0], undefined);
+  }, id);
+}
+
+/** منوی درون‌برنامه‌ای (☰) را باز می‌کند. */
+export async function openAppMenu(page: Page): Promise<void> {
+  await page.locator('.app-toolbar button').first().click();
+  await page.getByTestId('save-as-button').waitFor();
+}
+
+// ---------- تخته ----------
+
+export async function boardCenter(page: Page): Promise<{ x: number; y: number }> {
+  return page.evaluate(() => ({
+    x: Math.round(window.innerWidth / 2),
+    y: Math.round(window.innerHeight / 2),
+  }));
+}
+
+/** متن همهٔ گره‌ها/متن‌های روی تخته. */
+export async function boardTexts(page: Page): Promise<string[]> {
+  return page
+    .locator('.plait-text-container')
+    .evaluateAll((elements) => elements.map((element) => (element.textContent ?? '').replace(/\uFEFF/g, '')));
+}
+
+/**
+ * با ابزار نقشهٔ ذهنی (کلید M) یک گرهٔ ریشه وسط تخته می‌گذارد؛ همان کاری که کاربر می‌کند:
+ * پیش‌نمایش گره دنبال نشانگر می‌آید و با کلیک سر جایش می‌نشیند. گرهٔ تازه انتخاب‌شده است.
+ */
+export async function placeMindNode(page: Page): Promise<{ x: number; y: number }> {
+  const center = await boardCenter(page);
+  // میان‌برهای ابزار فقط وقتی نشانگر روی تخته است کار می‌کنند.
+  await page.mouse.move(center.x - 60, center.y - 40);
+  await page.keyboard.press('m');
+  await page.mouse.move(center.x, center.y, { steps: 5 });
+  await expect(page.locator('[plait-mind-temporary]')).toHaveCount(1);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator('[plait-mind-temporary]')).toHaveCount(0);
+  await expect(page.locator('.plait-text-container')).toHaveCount(1);
+  // نوار ابزار شناور یعنی گره انتخاب شده است.
+  await expect(page.locator('.popup-toolbar')).toBeVisible();
+  return center;
+}
+
+/** یک نقشهٔ ذهنی با ریشه‌ای به متن داده‌شده می‌سازد و از حالت ویرایش بیرون می‌آید. */
+export async function createMindMap(page: Page, text: string): Promise<{ x: number; y: number }> {
+  const center = await placeMindNode(page);
+  await page.mouse.dblclick(center.x, center.y);
+  await typeInEditor(page, text);
+  await leaveEditing(page);
+  await expect.poll(() => boardTexts(page)).toContain(text);
+  return center;
+}
+
+/** کلیدهای «سلام» روی صفحه‌کلید فارسی: حرف فارسی + کلید فیزیکی + کد مجازی ویندوز. */
+export const SALAM_KEYS: [string, string, number][] = [
+  ['س', 'KeyS', 83],
+  ['ل', 'KeyG', 71],
+  ['ا', 'KeyH', 72],
+  ['م', 'KeyL', 76],
+];
+
+/** شبیه‌سازی صفحه‌کلید فارسی: key حرف فارسی و code کلید فیزیکی است (مثل ویندوز). */
+export async function pressPersianKeys(page: Page, keys: [string, string, number][]): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  for (const [key, code, windowsVirtualKeyCode] of keys) {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code,
+      text: key,
+      unmodifiedText: key,
+      windowsVirtualKeyCode,
+    });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+    await page.waitForTimeout(50);
+  }
+  await cdp.detach();
+}
+
+/** منتظر می‌ماند تا ویرایشگر متن فوکوس بگیرد و سپس متن را (جایگزین متن انتخاب‌شده) می‌نویسد. */
+export async function typeInEditor(page: Page, text: string): Promise<void> {
+  await expect(page.locator('[contenteditable="true"]')).toBeFocused();
+  await page.keyboard.insertText(text);
+}
+
+/** کلیک روی جای خالی تخته: ویرایش متن تمام و انتخاب برداشته می‌شود. */
+export async function leaveEditing(page: Page): Promise<void> {
+  const size = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  await page.mouse.click(Math.round(size.w * 0.15), Math.round(size.h * 0.8));
+  await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
+}
+
+/** عنصرهایی که متنشان از کادرشان بیرون زده است (نباید چیزی باشد). */
+export async function overflowingElements(page: Page, rootSelector: string): Promise<string[]> {
+  return page.evaluate((selector) => {
+    const root = document.querySelector(selector);
+    if (!root) {
+      return [`root not found: ${selector}`];
+    }
+    return Array.from(root.querySelectorAll<HTMLElement>('*'))
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        // بریدن عمدی با سه‌نقطه (ellipsis) سرریز به حساب نمی‌آید.
+        if (style.textOverflow === 'ellipsis' || style.overflowX === 'auto' || style.overflowX === 'scroll') {
+          return false;
+        }
+        return element.scrollWidth > element.clientWidth + 1 && style.overflowX !== 'hidden';
+      })
+      .map((element) => `${element.tagName.toLowerCase()}.${element.className} «${(element.textContent ?? '').slice(0, 40)}»`);
+  }, rootSelector);
+}
+
+/** مرکز کادر متنِ گره‌ای که متنش داده شده (مختصات پنجره). */
+export async function nodeCenter(page: Page, text: string): Promise<{ x: number; y: number }> {
+  const center = await page.locator('.plait-text-container').evaluateAll((elements, wanted) => {
+    const element = elements.find((item) => (item.textContent ?? '').replace(/\uFEFF/g, '') === wanted);
+    if (!element) {
+      return null;
+    }
+    const rect = (element.closest('foreignObject') ?? element).getBoundingClientRect();
+    return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
+  }, text);
+  if (!center) {
+    throw new Error(`node not found on the board: ${text}`);
+  }
+  return center;
+}
+
+/** یک PNG کوچکِ معتبر (۳۲×۲۰، آبی) برای آزمودن درج تصویر. */
+export function samplePng(): Buffer {
+  const width = 32;
+  const height = 20;
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    for (let x = 0; x < width; x++) {
+      raw.set([30, 140, 200], row + 1 + x * 3);
+    }
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+export interface InkBounds {
+  /** پهنای تصویر */
+  width: number;
+  /** کادر گره: هر چیزی که رنگ پس‌زمینه نیست */
+  box: { left: number; right: number };
+  /** متن: پیکسل‌های تیره */
+  ink: { left: number; right: number } | null;
+}
+
+/**
+ * جای متن را در تصویرِ برون‌بری‌شده اندازه می‌گیرد: محدودهٔ افقی کادر گره و محدودهٔ افقی
+ * نوشتهٔ داخل آن. تصویر در خود پنجرهٔ برنامه رمزگشایی می‌شود (کتابخانهٔ اضافه لازم نیست).
+ */
+export async function measureInk(page: Page, png: Buffer): Promise<InkBounds> {
+  return page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('2d context is not available');
+    }
+    context.drawImage(image, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const background = [data[0], data[1], data[2], data[3]];
+    let boxLeft = width;
+    let boxRight = -1;
+    let inkLeft = width;
+    let inkRight = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 4;
+        const [r, g, b, a] = [data[offset], data[offset + 1], data[offset + 2], data[offset + 3]];
+        const differs =
+          Math.abs(r - background[0]) + Math.abs(g - background[1]) + Math.abs(b - background[2]) + Math.abs(a - background[3]) > 12;
+        if (differs) {
+          boxLeft = Math.min(boxLeft, x);
+          boxRight = Math.max(boxRight, x);
+        }
+        if (a > 200 && r + g + b < 330) {
+          inkLeft = Math.min(inkLeft, x);
+          inkRight = Math.max(inkRight, x);
+        }
+      }
+    }
+    return {
+      width,
+      box: { left: boxLeft, right: boxRight },
+      ink: inkRight < 0 ? null : { left: inkLeft, right: inkRight },
+    };
+  }, png.toString('base64'));
+}
