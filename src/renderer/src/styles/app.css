@@ -1,0 +1,376 @@
+:root {
+  --zn-font-ui: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+  --zn-color-text: #1f2430;
+  --zn-color-muted: #6b7280;
+  --zn-color-border: #e5e7eb;
+  --zn-color-surface: #ffffff;
+  --zn-color-accent: #6965db;
+  --zn-color-accent-soft: #eeeefc;
+  --zn-color-danger: #c0392b;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--zn-font-ui);
+  color: var(--zn-color-text);
+  background: #ffffff;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* متن‌های مخلوط (مسیر پرونده، نام لاتین، شماره نسخه) از متن پیرامون جدا می‌شوند. */
+bdi,
+.zn-isolate {
+  unicode-bidi: isolate;
+}
+
+.zn-app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.zn-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--zn-color-muted);
+  font-size: 14px;
+}
+
+/* ---------- پنجرهٔ گفت‌وگو ---------- */
+.zn-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.zn-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(680px, 100%);
+  background: var(--zn-color-surface);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+}
+
+.zn-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-block-end: 1px solid var(--zn-color-border);
+}
+
+.zn-modal__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.zn-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.zn-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-block-start: 1px solid var(--zn-color-border);
+}
+
+.zn-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--zn-color-muted);
+  cursor: pointer;
+}
+
+.zn-icon-button:hover {
+  background: var(--zn-color-accent-soft);
+  color: var(--zn-color-text);
+}
+
+.zn-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.zn-button {
+  min-width: 84px;
+  padding: 7px 16px;
+  border: 1px solid var(--zn-color-border);
+  border-radius: 8px;
+  background: var(--zn-color-surface);
+  color: var(--zn-color-text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.zn-button:hover {
+  background: var(--zn-color-accent-soft);
+}
+
+.zn-button--primary {
+  border-color: var(--zn-color-accent);
+  background: var(--zn-color-accent);
+  color: #ffffff;
+}
+
+.zn-button--primary:hover {
+  background: #5753c9;
+}
+
+.zn-button:focus-visible,
+.zn-icon-button:focus-visible,
+.zn-recent__open:focus-visible,
+.zn-link:focus-visible {
+  outline: 2px solid var(--zn-color-accent);
+  outline-offset: 2px;
+}
+
+.zn-link {
+  color: var(--zn-color-accent);
+  text-decoration: none;
+}
+
+.zn-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- درباره ---------- */
+.zn-about__brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-block-end: 16px;
+}
+
+.zn-about__logo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+}
+
+.zn-about__name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.zn-about__version {
+  margin: 0;
+  color: var(--zn-color-muted);
+  font-size: 13px;
+}
+
+.zn-about__section-title {
+  margin-block: 16px 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.zn-about__features {
+  margin: 0;
+  padding-inline-start: 22px;
+}
+
+.zn-about__features li {
+  margin-block: 2px;
+}
+
+.zn-about__credit {
+  margin-block: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--zn-color-accent-soft);
+}
+
+.zn-about__tech {
+  margin-block: 14px 0;
+  color: var(--zn-color-muted);
+  font-size: 12px;
+}
+
+/* ---------- پرونده‌های اخیر ---------- */
+.zn-recent__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zn-recent__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zn-recent__open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--zn-color-border);
+  border-radius: 10px;
+  background: var(--zn-color-surface);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.zn-recent__open:hover {
+  border-color: var(--zn-color-accent);
+  background: var(--zn-color-accent-soft);
+}
+
+.zn-recent__name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zn-recent__meta {
+  display: flex;
+  gap: 12px;
+  color: var(--zn-color-muted);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.zn-recent__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* مسیر پرونده چپ‌به‌راست است (dir=ltr در HTML) ولی کنار لبهٔ آغازِ سطرِ فارسی می‌نشیند. */
+  unicode-bidi: isolate;
+}
+
+.zn-recent__date {
+  flex: none;
+  white-space: nowrap;
+}
+
+.zn-recent__empty {
+  margin: 0;
+  padding: 28px 0;
+  color: var(--zn-color-muted);
+  text-align: center;
+}
+
+/* ---------- هماهنگی Drawnix با راست‌به‌چپ ---------- */
+
+/* متن داخل بوم با همان قلمی رسم می‌شود که Plait اندازه می‌گیرد (به fonts.css نگاه کنید). */
+.drawnix .tool-icon__keybinding,
+.drawnix .menu-item__shortcut {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* آیکن‌های جهت‌دار در راست‌به‌چپ آینه می‌شوند. */
+:dir(rtl) .drawnix .menu-item__submenu-indicator svg,
+:dir(rtl) .drawnix .zn-mirror-rtl svg {
+  transform: scaleX(-1);
+}
+
+/* ---------- پیام کوتاه ---------- */
+.zn-notice-wrapper {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 84px;
+  z-index: 3100;
+  display: flex;
+  justify-content: center;
+  padding-inline: 16px;
+  pointer-events: none;
+}
+
+.zn-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, 100%);
+  padding: 8px;
+  padding-inline-start: 16px;
+  border: 1px solid var(--zn-color-border);
+  border-inline-start: 4px solid var(--zn-color-accent);
+  border-radius: 10px;
+  background: var(--zn-color-surface);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+  font-size: 14px;
+  pointer-events: auto;
+}
+
+.zn-notice--success {
+  border-inline-start-color: #2e9e6b;
+}
+
+.zn-notice--error {
+  border-inline-start-color: var(--zn-color-danger);
+}
+
+.zn-notice__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.zn-notice__detail {
+  color: var(--zn-color-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+
+/* مسیرها dir=ltr دارند؛ در رابط راست‌به‌چپ کنار لبهٔ آغاز سطر (راست) می‌نشینند. */
+:root:dir(rtl) .zn-recent__path,
+:root:dir(rtl) .zn-notice__detail {
+  text-align: end;
+}

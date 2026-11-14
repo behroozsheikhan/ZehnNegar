@@ -1,0 +1,68 @@
+/*
+ * قلم وزیرمتن (Vazirmatn v33.003 — مجوز OFL، پروندهٔ LICENSE کنار قلم‌ها).
+ * قلم‌ها داخل برنامه بسته‌بندی می‌شوند؛ هیچ CDN یا اینترنتی لازم نیست.
+ */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../assets/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../assets/fonts/Vazirmatn-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../assets/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+/*
+ * متنِ داخل بوم: کتابخانهٔ Plait اندازهٔ متن را با یک فهرست ثابت قلم اندازه می‌گیرد
+ * (-apple-system, BlinkMacSystemFont, 'Segoe UI', …). برای این‌که متن بوم هم روی همهٔ
+ * سیستم‌ها با وزیرمتن و دقیقاً یکسان رسم و اندازه‌گیری شود، همان نام‌های ابتدای فهرست را
+ * به پرونده‌های وزیرمتن نگاشت می‌کنیم. (قلم‌های @font-face بر قلم‌های نصب‌شده مقدم‌اند.)
+ */
+@font-face {
+  font-family: '-apple-system';
+  src: url('../assets/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: '-apple-system';
+  src: url('../assets/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: 'BlinkMacSystemFont';
+  src: url('../assets/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: 'BlinkMacSystemFont';
+  src: url('../assets/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Segoe UI';
+  src: url('../assets/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Segoe UI';
+  src: url('../assets/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: block;
+}
