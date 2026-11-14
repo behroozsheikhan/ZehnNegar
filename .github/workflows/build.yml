@@ -8,10 +8,123 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  # Electron 45 و @electron/rebuild 4 به Node >= 22.12 نیاز دارند.
+  NODE_VERSION: 22
+
 jobs:
-  probe:
+  # ---------------------------------------------------------------------------
+  # lint + تست‌های واحد + تست دیتابیس درون Electron + تست e2e (لینوکس، xvfb)
+  # ---------------------------------------------------------------------------
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - run: |
-          node -v; npm -v; which xvfb-run || true
-          echo "probe ok"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bootstrap (system libraries, npm ci, native module check)
+        run: bash scripts/bootstrap.sh
+
+      - name: Lint, RTL CSS guard and type check
+        run: npm run lint
+
+      - name: Unit and UI tests
+        run: npm test
+
+      - name: Database tests inside Electron
+        run: npm run test:db
+
+      - name: Build
+        run: npm run build
+
+      - name: End-to-end tests (Electron under xvfb)
+        run: npm run test:e2e
+
+      - name: Upload e2e report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-linux
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # نصب‌کنندهٔ ویندوز (NSIS x64) + آزمون برنامهٔ بسته‌بندی‌شده روی ویندوز واقعی
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Database tests inside Electron (Windows binary of better-sqlite3)
+        run: ELECTRON_RUN_AS_NODE=1 npx electron ./node_modules/vitest/vitest.mjs run --dir src/main/db
+
+      - name: Build
+        run: npm run build
+
+      - name: Package installer (NSIS x64)
+        run: npm run pack:win
+
+      - name: Verify package contents
+        run: |
+          set -euo pipefail
+          ls -la release
+          unpacked="release/win-unpacked"
+          test -f "$unpacked/ZehnNegar.exe"
+          # ماژول نیتیو بیرون از asar و فقط باینری ویندوز x64
+          ls "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds"
+          test -f "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/win32-x64.node"
+          test "$(ls "$unpacked/resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds" | wc -l)" -eq 1
+          # فقط بسته‌های زبان فارسی و انگلیسی
+          ls "$unpacked/locales"
+          test -f "$unpacked/locales/fa.pak"
+          test -f "$unpacked/locales/en-US.pak"
+          test "$(ls "$unpacked/locales" | wc -l)" -eq 2
+          ls release/*.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZehnNegar-windows-x64
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: End-to-end tests against the packaged app
+        env:
+          ZN_EXECUTABLE: release/win-unpacked/ZehnNegar.exe
+        run: npx playwright test --reporter=line
+
+      - name: Upload e2e report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report-windows
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7

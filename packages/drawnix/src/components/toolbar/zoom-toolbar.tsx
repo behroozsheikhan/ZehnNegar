@@ -11,6 +11,7 @@ import Menu from '../menu/menu';
 import MenuItem from '../menu/menu-item';
 import { useI18n } from '../../i18n';
 import { formatPercent } from '../../i18n/digits';
+import { getShortcutKey } from '../../utils/common';
 
 export const ZoomToolbar = () => {
   const board = useBoard();
@@ -62,22 +63,21 @@ export const ZoomToolbar = () => {
               }}
             >
               <MenuItem
-                data-testid="open-button"
+                data-testid="zoom-fit-button"
                 onSelect={() => {
                   BoardTransforms.fitViewport(board);
                 }}
                 aria-label={t('zoom.fit')}
-                shortcut={`Cmd+Shift+=`}
               >
                 {t('zoom.fit')}
               </MenuItem>
               <MenuItem
-                data-testid="open-button"
+                data-testid="zoom-reset-button"
                 onSelect={() => {
                   BoardTransforms.updateZoom(board, 1);
                 }}
                 aria-label={t('zoom.100')}
-                shortcut={`Cmd+0`}
+                shortcut={getShortcutKey('CtrlOrCmd+0')}
               >
                 {t('zoom.100')}
               </MenuItem>

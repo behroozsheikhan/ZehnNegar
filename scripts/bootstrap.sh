@@ -67,8 +67,17 @@ fi
 # ---------- 3) ماژول نیتیو برای ABI الکترون ----------
 ELECTRON_BIN="node_modules/electron/dist/electron"
 if [ -x "$ELECTRON_BIN" ]; then
+  # better-sqlite3 باینری آمادهٔ N-API دارد (مستقل از ABI الکترون) و binding.gyp آن در صورت
+  # وجود باینری آماده چیزی کامپایل نمی‌کند؛ پس شکست این گام کشنده نیست. معیار واقعی آزمون
+  # بارگذاری ماژول درون Electron در گام بعد است.
   log "electron-rebuild -f -w better-sqlite3"
-  env -u NODE_OPTIONS npx electron-rebuild -f -w better-sqlite3
+  if ! env -u NODE_OPTIONS npx electron-rebuild -f -w better-sqlite3; then
+    warn "electron-rebuild failed; relying on the N-API prebuilt binary"
+  fi
+
+  log "better-sqlite3 inside Electron"
+  env -u NODE_OPTIONS ELECTRON_RUN_AS_NODE=1 "$ELECTRON_BIN" -e \
+    "const D=require('better-sqlite3');const d=new D(':memory:');console.log('sqlite', d.prepare('select sqlite_version() v').get().v, 'electron', process.versions.electron);d.close()"
 
   # ---------- 4) آزمون سلامت ----------
   log "electron --version"
