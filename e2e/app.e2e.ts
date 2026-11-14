@@ -201,6 +201,31 @@ test.describe('نقشهٔ ذهنی و پرونده', () => {
     await expect.poll(async () => (await boardTexts(page)).sort()).toEqual(['سل', 'هزینه: ۱۲ میلیون'].sort());
   });
 
+  test('در رابط فارسی رقم‌هایی که تایپ می‌شوند فارسی‌اند؛ پس از متن لاتین همان می‌مانند', async ({ launch }) => {
+    const { page } = await launch();
+
+    // چیدمان «Persian» ویندوز در ردیف عددها رقم لاتین می‌دهد؛ همان کلیدها این‌جا فشرده می‌شوند.
+    await placeMindNode(page);
+    await page.keyboard.type('1404', { delay: 40 });
+    await expect(page.locator('[contenteditable="true"]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => boardTexts(page)).toEqual(['۱۴۰۴']);
+
+    await page.keyboard.press('Tab');
+    await typeInEditor(page, 'قیمت');
+    await page.keyboard.type(' 250', { delay: 40 });
+    await page.keyboard.press('Enter');
+
+    await page.keyboard.press('Enter');
+    await typeInEditor(page, 'iPhone');
+    await page.keyboard.type(' 15', { delay: 40 });
+    await leaveEditing(page);
+
+    await expect
+      .poll(async () => (await boardTexts(page)).sort())
+      .toEqual(['۱۴۰۴', 'قیمت ۲۵۰', 'iPhone 15'].sort());
+  });
+
   test('انصراف از ابزار نقشهٔ ذهنی گرهٔ ناخواسته نمی‌سازد', async ({ launch }) => {
     const { page } = await launch();
     const center = await boardCenter(page);
@@ -496,6 +521,16 @@ test.describe('زبان و پنجره‌ها', () => {
     await page.getByRole('button', { name: 'Branches to the left' }).click();
     await expect(page.getByRole('button', { name: 'Branches to the left' })).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(async () => (await offset()).x).toBeLessThan(-30);
+
+    // در رابط انگلیسی رقم‌های تایپ‌شده لاتین می‌مانند.
+    await leaveEditing(page);
+    const branch = await nodeCenter(page, 'Branch');
+    await page.mouse.click(branch.x, branch.y);
+    await expect(page.locator('.popup-toolbar')).toBeVisible();
+    await page.keyboard.type('2026', { delay: 40 });
+    await expect(page.locator('[contenteditable="true"]')).toBeFocused();
+    await leaveEditing(page);
+    await expect.poll(async () => (await boardTexts(page)).sort()).toEqual(['2026', 'Central Topic'].sort());
   });
 
   test('«درباره»: نسخه با ارقام فارسی، قدردانی از Drawnix و پیوند در مرورگر سیستم', async ({ launch }) => {
