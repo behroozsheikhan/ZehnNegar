@@ -1,0 +1,17 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          node -v; npm -v; which xvfb-run || true
+          echo "probe ok"
