@@ -5,6 +5,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
 import {
   _electron as electron,
   test as base,
@@ -326,4 +327,107 @@ export async function overflowingElements(page: Page, rootSelector: string): Pro
       })
       .map((element) => `${element.tagName.toLowerCase()}.${element.className} «${(element.textContent ?? '').slice(0, 40)}»`);
   }, rootSelector);
+}
+
+/** مرکز کادر متنِ گره‌ای که متنش داده شده (مختصات پنجره). */
+export async function nodeCenter(page: Page, text: string): Promise<{ x: number; y: number }> {
+  const center = await page.locator('.plait-text-container').evaluateAll((elements, wanted) => {
+    const element = elements.find((item) => (item.textContent ?? '').replace(/\uFEFF/g, '') === wanted);
+    if (!element) {
+      return null;
+    }
+    const rect = (element.closest('foreignObject') ?? element).getBoundingClientRect();
+    return { x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) };
+  }, text);
+  if (!center) {
+    throw new Error(`node not found on the board: ${text}`);
+  }
+  return center;
+}
+
+/** یک PNG کوچکِ معتبر (۳۲×۲۰، آبی) برای آزمودن درج تصویر. */
+export function samplePng(): Buffer {
+  const width = 32;
+  const height = 20;
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    for (let x = 0; x < width; x++) {
+      raw.set([30, 140, 200], row + 1 + x * 3);
+    }
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+export interface InkBounds {
+  /** پهنای تصویر */
+  width: number;
+  /** کادر گره: هر چیزی که رنگ پس‌زمینه نیست */
+  box: { left: number; right: number };
+  /** متن: پیکسل‌های تیره */
+  ink: { left: number; right: number } | null;
+}
+
+/**
+ * جای متن را در تصویرِ برون‌بری‌شده اندازه می‌گیرد: محدودهٔ افقی کادر گره و محدودهٔ افقی
+ * نوشتهٔ داخل آن. تصویر در خود پنجرهٔ برنامه رمزگشایی می‌شود (کتابخانهٔ اضافه لازم نیست).
+ */
+export async function measureInk(page: Page, png: Buffer): Promise<InkBounds> {
+  return page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('2d context is not available');
+    }
+    context.drawImage(image, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const background = [data[0], data[1], data[2], data[3]];
+    let boxLeft = width;
+    let boxRight = -1;
+    let inkLeft = width;
+    let inkRight = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 4;
+        const [r, g, b, a] = [data[offset], data[offset + 1], data[offset + 2], data[offset + 3]];
+        const differs =
+          Math.abs(r - background[0]) + Math.abs(g - background[1]) + Math.abs(b - background[2]) + Math.abs(a - background[3]) > 12;
+        if (differs) {
+          boxLeft = Math.min(boxLeft, x);
+          boxRight = Math.max(boxRight, x);
+        }
+        if (a > 200 && r + g + b < 330) {
+          inkLeft = Math.min(inkLeft, x);
+          inkRight = Math.max(inkRight, x);
+        }
+      }
+    }
+    return {
+      width,
+      box: { left: boxLeft, right: boxRight },
+      ink: inkRight < 0 ? null : { left: inkLeft, right: inkRight },
+    };
+  }, png.toString('base64'));
 }

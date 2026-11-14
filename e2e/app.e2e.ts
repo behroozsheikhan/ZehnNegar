@@ -11,10 +11,13 @@ import {
   dialogCalls,
   expect,
   leaveEditing,
+  measureInk,
   nativeMenuLabels,
   nativeSubmenuLabels,
+  nodeCenter,
   openAppMenu,
   overflowingElements,
+  samplePng,
   setOpenPath,
   setSavePath,
   setUnsavedResponse,
@@ -264,6 +267,135 @@ test.describe('نقشهٔ ذهنی و پرونده', () => {
     const exportCall = (await dialogCalls(app)).find((call) => call.kind === 'save');
     expect(exportCall?.title).toBe('برون‌بری تصویر');
   });
+
+  test('در تصویر برون‌بری‌شده متن فارسی وسط کادر گره است و بریده نمی‌شود', async ({ launch, workDir }) => {
+    const { app, page } = await launch();
+    // دو کلمه: پیش‌تر در خروجی (که با قلم سیستم رسم می‌شد) کلمهٔ دوم به خط بعد می‌رفت و بریده
+    // می‌شد و کلمهٔ اول به لبهٔ راست کادر می‌چسبید.
+    await createMindMap(page, 'موضوع اصلی');
+
+    const pngPath = join(workDir, 'وسط‌چین.png');
+    await setSavePath(app, pngPath);
+    await clickNativeMenu(app, 'export-png');
+    await expect(page.getByTestId('app-notice')).toContainText('خروجی ذخیره شد');
+
+    const bounds = await measureInk(page, readFileSync(pngPath));
+    expect(bounds.ink, 'the exported image has no text').not.toBeNull();
+    const ink = bounds.ink ?? { left: 0, right: 0 };
+    const boxWidth = bounds.box.right - bounds.box.left;
+    const inkWidth = ink.right - ink.left;
+    const offCenter = (ink.left + ink.right) / 2 - (bounds.box.left + bounds.box.right) / 2;
+    // متن وسط کادر است (نه چسبیده به یک لبه) …
+    expect(Math.abs(offCenter) / boxWidth, JSON.stringify(bounds)).toBeLessThan(0.04);
+    // … و هر دو کلمه در یک خط دیده می‌شوند: نوشته بیشترِ پهنای کادر را پر می‌کند.
+    expect(inkWidth / boxWidth, JSON.stringify(bounds)).toBeGreaterThan(0.55);
+    expect(inkWidth / boxWidth, JSON.stringify(bounds)).toBeLessThan(0.95);
+
+    // SVG مستقل است: قلم برنامه داخل خود پرونده جاسازی شده است.
+    const svgPath = join(workDir, 'وسط‌چین.svg');
+    await setSavePath(app, svgPath);
+    await clickNativeMenu(app, 'export-svg');
+    await expect.poll(() => existsSync(svgPath)).toBe(true);
+    const svg = readFileSync(svgPath, 'utf8');
+    expect(svg).toContain('موضوع اصلی');
+    const fontRules = svg.match(/@font-face\{[^}]*\}/g) ?? [];
+    const fontRule = fontRules[0] ?? '';
+    expect(fontRule).toContain('url("data:font/woff2;base64,');
+    expect(fontRule.length).toBeGreaterThan(20_000);
+  });
+
+  test('ابزار «تصویر» تصویر انتخاب‌شده را روی تخته می‌گذارد', async ({ launch, workDir }) => {
+    const { app, page } = await launch();
+    const imageTool = page.locator('label[title^="تصویر"]');
+    await expect(imageTool).toBeVisible();
+
+    const chooserPromise = page.waitForEvent('filechooser');
+    await imageTool.click();
+    const chooser = await chooserPromise;
+    expect(chooser.isMultiple()).toBe(false);
+    expect(await chooser.element().getAttribute('accept')).toContain('image/png');
+    await chooser.setFiles({ name: 'عکس نمونه.png', mimeType: 'image/png', buffer: samplePng() });
+
+    const boardImage = page.locator('.board-host-svg .element-host image, .board-host-svg .element-host img');
+    await expect(boardImage).toHaveCount(1);
+    await expect(page.locator('[data-testid="file-picker-input"]')).toHaveCount(0);
+
+    // تصویر جزو سند است: در پروندهٔ ذخیره‌شده می‌ماند.
+    const filePath = join(workDir, 'با تصویر.drawnix');
+    await setSavePath(app, filePath);
+    await clickNativeMenu(app, 'file-save');
+    await expect.poll(() => existsSync(filePath)).toBe(true);
+    const saved = JSON.parse(readFileSync(filePath, 'utf8')) as { elements: { type: string; url?: string }[] };
+    expect(saved.elements.map((element) => element.type)).toEqual(['image']);
+    expect(saved.elements[0]?.url).toMatch(/^data:image\/png;base64,/);
+  });
+
+  test('جهت شاخه‌ها روی گرهٔ ریشه انتخاب می‌شود: چپ، راست یا پایین', async ({ launch }) => {
+    const { page } = await launch();
+    const pressed = (direction: string) =>
+      page.getByTestId(`mind-direction-${direction}`).getAttribute('aria-pressed');
+    const selectRoot = async () => {
+      await leaveEditing(page);
+      const root = await nodeCenter(page, 'ریشه');
+      await page.mouse.click(root.x, root.y);
+      await expect(page.getByTestId('mind-direction')).toBeVisible();
+    };
+
+    // با ساختن اولین گره، انتخاب جهت همان‌جا در نوار ابزار گره هست؛ پیش‌فرض فارسی «چپ» است.
+    await placeMindNode(page);
+    await expect(page.getByRole('group', { name: 'جهت شاخه‌ها' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'شاخه‌ها به سمت پایین' })).toBeVisible();
+    expect([await pressed('left'), await pressed('right'), await pressed('down')]).toEqual(['true', 'false', 'false']);
+
+    await page.keyboard.insertText('ریشه');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    await typeInEditor(page, 'شاخه');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    await typeInEditor(page, 'زیرشاخه');
+    await leaveEditing(page);
+    await expect.poll(async () => (await boardTexts(page)).sort()).toEqual(['ریشه', 'زیرشاخه', 'شاخه'].sort());
+
+    const positions = async () => ({
+      root: await nodeCenter(page, 'ریشه'),
+      branch: await nodeCenter(page, 'شاخه'),
+      leaf: await nodeCenter(page, 'زیرشاخه'),
+    });
+
+    let at = await positions();
+    expect(at.branch.x).toBeLessThan(at.root.x);
+    expect(at.leaf.x).toBeLessThan(at.branch.x);
+
+    // انتخاب جهت فقط روی ریشه است، نه روی شاخه‌ها.
+    await page.mouse.click(at.branch.x, at.branch.y);
+    await expect(page.locator('.popup-toolbar')).toBeVisible();
+    await expect(page.getByTestId('mind-direction')).toHaveCount(0);
+
+    // پایین: همهٔ شاخه‌ها و زیرشاخه‌ها زیر ریشه می‌روند.
+    await selectRoot();
+    await page.getByTestId('mind-direction-down').click();
+    await expect.poll(() => pressed('down')).toBe('true');
+    await expect.poll(async () => (await positions()).branch.y - (await positions()).root.y).toBeGreaterThan(30);
+    at = await positions();
+    expect(at.leaf.y).toBeGreaterThan(at.branch.y + 30);
+    expect(Math.abs(at.branch.x - at.root.x)).toBeLessThan(5);
+
+    // راست
+    await selectRoot();
+    await page.getByTestId('mind-direction-right').click();
+    await expect.poll(() => pressed('right')).toBe('true');
+    await expect.poll(async () => (await positions()).branch.x - (await positions()).root.x).toBeGreaterThan(30);
+    at = await positions();
+    expect(at.leaf.x).toBeGreaterThan(at.branch.x);
+    expect(Math.abs(at.branch.y - at.root.y)).toBeLessThan(5);
+
+    // شاخهٔ تازه هم از جهت ریشه پیروی می‌کند.
+    await page.keyboard.press('Tab');
+    await typeInEditor(page, 'شاخهٔ دوم');
+    await leaveEditing(page);
+    expect((await nodeCenter(page, 'شاخهٔ دوم')).x).toBeGreaterThan((await nodeCenter(page, 'ریشه')).x);
+  });
 });
 
 test.describe('تغییرات ذخیره‌نشده', () => {
@@ -328,6 +460,32 @@ test.describe('زبان و پنجره‌ها', () => {
     await second.page.getByTestId('language-fa').click();
     await expect(second.page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect.poll(() => nativeMenuLabels(second.app)).toEqual(['پرونده', 'ویرایش', 'نما', 'راهنما']);
+  });
+
+  test('انتخاب جهت شاخه‌ها در رابط انگلیسی هم هست', async ({ launch }) => {
+    const { page } = await launch();
+    await openAppMenu(page);
+    await page.getByTestId('language-switcher-button').hover();
+    await page.getByTestId('language-en').click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await leaveEditing(page);
+
+    // پیش‌فرض انگلیسی «راست» است.
+    await placeMindNode(page);
+    await expect(page.getByRole('group', { name: 'Branch direction' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Branches to the left' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Branches to the right' })).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByRole('button', { name: 'Branches downward' }).click();
+    await expect(page.getByRole('button', { name: 'Branches downward' })).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Tab');
+    await typeInEditor(page, 'Branch');
+    await leaveEditing(page);
+    expect((await nodeCenter(page, 'Branch')).y).toBeGreaterThan((await nodeCenter(page, 'Central Topic')).y + 30);
+
+    await page.mouse.click((await nodeCenter(page, 'Central Topic')).x, (await nodeCenter(page, 'Central Topic')).y);
+    await page.getByRole('button', { name: 'Branches to the left' }).click();
+    await expect.poll(async () => (await nodeCenter(page, 'Branch')).x - (await nodeCenter(page, 'Central Topic')).x).toBeLessThan(-30);
   });
 
   test('«درباره»: نسخه با ارقام فارسی، قدردانی از Drawnix و پیوند در مرورگر سیستم', async ({ launch }) => {
