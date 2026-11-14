@@ -148,3 +148,61 @@ jobs:
             e2e-artifacts
           if-no-files-found: ignore
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # انتشار در GitHub Releases: فقط وقتی برچسب نسخه (مثل v1.0.0) فرستاده شود و فقط پس از
+  # موفقیت هر دو کار بالا. همان نصب‌کننده‌ای منتشر می‌شود که روی ویندوز نصب و آزموده شده است.
+  # ---------------------------------------------------------------------------
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag matches the app version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error title=release::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Download the tested installer
+        uses: actions/download-artifact@v8
+        with:
+          name: ZehnNegar-windows-x64
+          path: release-assets
+
+      - name: Checksums
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          test -f "ZehnNegar-Setup-$VERSION-x64.exe"
+          sha256sum -- *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          ls -la
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          notes="docs/releases/$tag.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # اجرای دوباره برای همان برچسب: فقط پرونده‌ها جایگزین می‌شوند.
+            gh release upload "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt --clobber
+          elif [ -f "$notes" ]; then
+            gh release create "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt \
+              --verify-tag --title "ZehnNegar $VERSION" --notes-file "$notes"
+          else
+            gh release create "$tag" release-assets/*.exe release-assets/SHA256SUMS.txt \
+              --verify-tag --title "ZehnNegar $VERSION" --generate-notes
+          fi
+          echo "::notice title=release::$(gh release view "$tag" --json url,assets --jq '.url + " | " + ([.assets[] | .name + " (" + (.size | tostring) + " bytes)"] | join(", "))')"
