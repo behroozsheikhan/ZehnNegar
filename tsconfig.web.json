@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client", "vitest/globals", "node"]
+  },
+  "include": [
+    "src/renderer/src/**/*",
+    "src/shared/**/*",
+    "packages/*/src/**/*",
+    "packages/drawnix/testing/**/*"
+  ]
+}
