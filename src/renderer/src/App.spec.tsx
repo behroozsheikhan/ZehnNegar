@@ -30,6 +30,8 @@ interface FakeDrawnixProps {
 }
 
 const boards: FakeBoard[] = [];
+/** تخته‌هایی که به برنامه تحویل داده شده‌اند (afterInit در یک effect صدا زده می‌شود). */
+const initializedBoards = new WeakSet<FakeBoard>();
 
 vi.mock('@drawnix/drawnix', async () => {
   const React = await import('react');
@@ -48,6 +50,7 @@ vi.mock('@drawnix/drawnix', async () => {
     const board = boardRef.current;
     React.useEffect(() => {
       props.afterInit(board);
+      initializedBoards.add(board);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const addNode = () => {
@@ -353,6 +356,11 @@ describe('App', () => {
       const api = await renderApp();
       click('host-open');
       await waitFor(() => expect(board().dataset.count).toBe('1'));
+      // تختهٔ سندِ بازشده در یک effect به برنامه می‌رسد؛ پیش از آن برون‌بری «تخته خالی» می‌بیند.
+      await waitFor(() => {
+        const current = boards.at(-1);
+        expect(current && initializedBoards.has(current)).toBe(true);
+      });
       click('host-export-png');
       await waitFor(() => expect(api.state.exports).toHaveLength(1));
       expect(api.state.exports[0]).toEqual({ format: 'png', size: 5, suggestedName: 'برنامهٔ سفر نوروزی' });
