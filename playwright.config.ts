@@ -12,10 +12,13 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
+  // در CI گزارش JSON را scripts/ci-e2e-report.mjs به annotation تبدیل می‌کند.
+  reporter: process.env.CI
+    ? [['line'], ['json', { outputFile: 'e2e-artifacts/report.json' }], ['html', { open: 'never' }]]
+    : 'line',
   use: {
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

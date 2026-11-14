@@ -54,8 +54,8 @@ const fa: AppStrings = {
     features: [
       'نقشهٔ ذهنی با چیدمان خودکار و شاخه‌های رنگی',
       'فلوچارت با شکل‌ها، پیکان‌ها و اتصال هوشمند',
-      'طراحی آزاد با قلم، ماژیک، هایلایتر و پاک‌کن',
-      'متن فارسی راست‌به‌چپ، پیوند، تصویر و برچسب',
+      'طراحی آزاد با قلم و پاک‌کن',
+      'متن فارسی راست‌به‌چپ، پیوند و تصویر',
       'تبدیل متن Markdown و Mermaid به نقشه و نمودار',
       'خروجی تصویر با قالب‌های PNG و JPG و SVG؛ ذخیره در پروندهٔ ‎.drawnix',
       'ذخیرهٔ خودکار پیش‌نویس و فهرست پرونده‌های اخیر',
@@ -107,8 +107,8 @@ const en: AppStrings = {
     features: [
       'Mind maps with automatic layout and coloured branches',
       'Flowcharts with shapes, arrows and smart connectors',
-      'Freehand drawing with pen, marker, highlighter and eraser',
-      'Right-to-left Persian text, links, images and stickers',
+      'Freehand drawing with pen and eraser',
+      'Right-to-left Persian text, links and images',
       'Convert Markdown and Mermaid text into maps and diagrams',
       'Export to PNG, JPG and SVG; save as .drawnix files',
       'Automatic draft saving and a recent-files list',

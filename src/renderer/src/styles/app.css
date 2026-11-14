@@ -78,6 +78,11 @@ bdi,
   overflow: hidden;
 }
 
+/* خودِ کادر فقط برای نگه‌داشتن فوکوس درون پنجره فوکوس می‌گیرد؛ حلقهٔ فوکوس لازم ندارد. */
+.zn-modal:focus {
+  outline: none;
+}
+
 .zn-modal__header {
   display: flex;
   align-items: center;

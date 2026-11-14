@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -48,14 +48,19 @@ jobs:
       - name: End-to-end tests (Electron under xvfb)
         run: npm run test:e2e
 
+      - name: Report e2e failures
+        if: failure()
+        run: node scripts/ci-e2e-report.mjs
+
       - name: Upload e2e report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report-linux
           path: |
             playwright-report
             test-results
+            e2e-artifacts
           if-no-files-found: ignore
           retention-days: 7
 
@@ -69,9 +74,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -106,7 +111,7 @@ jobs:
           ls release/*.exe
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ZehnNegar-windows-x64
           path: release/*.exe
@@ -116,15 +121,20 @@ jobs:
       - name: End-to-end tests against the packaged app
         env:
           ZN_EXECUTABLE: release/win-unpacked/ZehnNegar.exe
-        run: npx playwright test --reporter=line
+        run: npx playwright test
+
+      - name: Report e2e failures
+        if: failure()
+        run: node scripts/ci-e2e-report.mjs
 
       - name: Upload e2e report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report-windows
           path: |
             playwright-report
             test-results
+            e2e-artifacts
           if-no-files-found: ignore
           retention-days: 7

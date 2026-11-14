@@ -86,6 +86,15 @@ export const test = base.extend<Fixtures>({
           : { cwd: ROOT, args: ['.', '--no-sandbox', '--disable-gpu', ...extraArgs], env }
       );
 
+      // خروجی فرایند اصلی و خطاهای renderer در گزارش تستِ ناموفق دیده می‌شود.
+      app.process().stderr?.on('data', (chunk: Buffer) => process.stderr.write(`[main] ${chunk.toString()}`));
+      app.on('window', (window) => {
+        window.on('pageerror', (error) => process.stderr.write(`[renderer] ${error.message}\n`));
+        window.on('console', (message) => {
+          if (message.type() === 'error') process.stderr.write(`[console] ${message.text()}\n`);
+        });
+      });
+
       // پیش‌فرض امن: هیچ پنجرهٔ نیتیوی باز نمی‌ماند (انصراف / «ذخیره نکن»).
       await app.evaluate(({ dialog }) => {
         const calls: unknown[] = [];
