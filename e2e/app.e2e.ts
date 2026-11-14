@@ -342,12 +342,13 @@ test.describe('نقشهٔ ذهنی و پرونده', () => {
     };
 
     // با ساختن اولین گره، انتخاب جهت همان‌جا در نوار ابزار گره هست؛ پیش‌فرض فارسی «چپ» است.
-    await placeMindNode(page);
+    const center = await placeMindNode(page);
     await expect(page.getByRole('group', { name: 'جهت شاخه‌ها' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'شاخه‌ها به سمت پایین' })).toBeVisible();
     expect([await pressed('left'), await pressed('right'), await pressed('down')]).toEqual(['true', 'false', 'false']);
 
-    await page.keyboard.insertText('ریشه');
+    await page.mouse.dblclick(center.x, center.y);
+    await typeInEditor(page, 'ریشه');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Tab');
     await typeInEditor(page, 'شاخه');
@@ -391,6 +392,7 @@ test.describe('نقشهٔ ذهنی و پرونده', () => {
     expect(Math.abs(at.branch.y - at.root.y)).toBeLessThan(5);
 
     // شاخهٔ تازه هم از جهت ریشه پیروی می‌کند.
+    await selectRoot();
     await page.keyboard.press('Tab');
     await typeInEditor(page, 'شاخهٔ دوم');
     await leaveEditing(page);
@@ -475,17 +477,25 @@ test.describe('زبان و پنجره‌ها', () => {
     await expect(page.getByRole('group', { name: 'Branch direction' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Branches to the left' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByRole('button', { name: 'Branches to the right' })).toHaveAttribute('aria-pressed', 'true');
-
-    await page.getByRole('button', { name: 'Branches downward' }).click();
-    await expect(page.getByRole('button', { name: 'Branches downward' })).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Tab');
     await typeInEditor(page, 'Branch');
     await leaveEditing(page);
-    expect((await nodeCenter(page, 'Branch')).y).toBeGreaterThan((await nodeCenter(page, 'Central Topic')).y + 30);
+    const offset = async () => {
+      const root = await nodeCenter(page, 'Central Topic');
+      const branch = await nodeCenter(page, 'Branch');
+      return { x: branch.x - root.x, y: branch.y - root.y };
+    };
+    expect((await offset()).x).toBeGreaterThan(30);
 
-    await page.mouse.click((await nodeCenter(page, 'Central Topic')).x, (await nodeCenter(page, 'Central Topic')).y);
+    const root = await nodeCenter(page, 'Central Topic');
+    await page.mouse.click(root.x, root.y);
+    await page.getByRole('button', { name: 'Branches downward' }).click();
+    await expect(page.getByRole('button', { name: 'Branches downward' })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => (await offset()).y).toBeGreaterThan(30);
+
     await page.getByRole('button', { name: 'Branches to the left' }).click();
-    await expect.poll(async () => (await nodeCenter(page, 'Branch')).x - (await nodeCenter(page, 'Central Topic')).x).toBeLessThan(-30);
+    await expect(page.getByRole('button', { name: 'Branches to the left' })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(async () => (await offset()).x).toBeLessThan(-30);
   });
 
   test('«درباره»: نسخه با ارقام فارسی، قدردانی از Drawnix و پیوند در مرورگر سیستم', async ({ launch }) => {
