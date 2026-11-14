@@ -14,6 +14,7 @@ type ToolButtonBaseProps = {
   icon?: React.ReactNode;
   'aria-label': string;
   'aria-keyshortcuts'?: string;
+  'aria-pressed'?: boolean;
   'data-testid'?: string;
   label?: string;
   title?: string;
@@ -118,6 +119,7 @@ export const ToolButton = React.forwardRef((props: ToolButtonProps, ref) => {
         hidden={props.hidden}
         title={props.title}
         aria-label={props['aria-label']}
+        aria-pressed={props['aria-pressed']}
         type={type}
         onClick={onClick}
         onPointerDown={(event) => {

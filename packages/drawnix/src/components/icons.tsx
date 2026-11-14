@@ -658,3 +658,26 @@ export const InfoIcon = createIcon(
     <path d="M12 7.5v.01" />
   </svg>
 );
+
+// جهت شاخه‌های نقشهٔ ذهنی. این نمادها جهت فیزیکی را نشان می‌دهند و در راست‌به‌چپ آینه نمی‌شوند.
+const mindDirectionIcon = (transform?: string) => (
+  <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <g
+      transform={transform}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="1" y="5.75" width="5" height="4.5" rx="1" />
+      <rect x="11" y="1.6" width="4" height="3.6" rx="1" />
+      <rect x="11" y="10.8" width="4" height="3.6" rx="1" />
+      <path d="M6 8h2.5M11 3.4H9.5a1 1 0 0 0-1 1v7.2a1 1 0 0 0 1 1H11" />
+    </g>
+  </svg>
+);
+
+export const MindDirectionRightIcon = createIcon(mindDirectionIcon());
+export const MindDirectionLeftIcon = createIcon(mindDirectionIcon('matrix(-1 0 0 1 16 0)'));
+export const MindDirectionDownIcon = createIcon(mindDirectionIcon('rotate(90 8 8)'));

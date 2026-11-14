@@ -42,6 +42,8 @@ import { Freehand } from '../../../plugins/freehand/type';
 import { PopupLinkButton } from './link-button';
 import { ArrowMarkButton } from './arrow-mark-button';
 import { MoreOptionsButton } from './more-options-button';
+import { MindDirectionControl } from './mind-direction-control';
+import { getSelectedMindRoot } from '../../../utils/mind-direction';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -51,6 +53,7 @@ export const PopupToolbar = () => {
   const movingOrDraggingRef = useRef(movingOrDragging);
   const hasImage = selectedElements.some(PlaitDrawElement.isImage);
   const open = selectedElements.length > 0 && !isSelectionMoving(board);
+  const mindRoot = open ? getSelectedMindRoot(board) : null;
   const { viewport, selection, children } = board;
   const { refs, floatingStyles } = useFloating({
     placement: 'right-start',
@@ -169,6 +172,9 @@ export const PopupToolbar = () => {
           style={floatingStyles}
         >
           <Stack.Row gap={1}>
+            {mindRoot && !PlaitBoard.hasBeenTextEditing(board) && (
+              <MindDirectionControl board={board} root={mindRoot} key={'mind-direction'} />
+            )}
             {state.hasText && (
               <PopupFontSizeControl
                 board={board}
