@@ -46,10 +46,11 @@ jobs:
         run: npm run build
 
       - name: End-to-end tests (Electron under xvfb)
+        id: e2e
         run: npm run test:e2e
 
       - name: Report e2e failures
-        if: failure()
+        if: failure() && steps.e2e.outcome == 'failure'
         run: node scripts/ci-e2e-report.mjs
 
       - name: Upload e2e report
@@ -125,10 +126,11 @@ jobs:
         run: ./scripts/ci-verify-installer.ps1 -Phase install
 
       - name: End-to-end tests against the installed app
+        id: e2e
         run: npx playwright test
 
       - name: Report e2e failures
-        if: failure()
+        if: failure() && steps.e2e.outcome == 'failure'
         run: node scripts/ci-e2e-report.mjs
 
       - name: Uninstall and verify nothing is left behind

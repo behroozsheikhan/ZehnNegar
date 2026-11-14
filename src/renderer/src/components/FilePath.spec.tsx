@@ -12,6 +12,10 @@ describe('FilePath', () => {
     expect(element.getAttribute('title')).toBe(path);
     const parts = Array.from(element.querySelectorAll('bdi')).map((part) => part.textContent);
     expect(parts).toEqual(['C:', 'Users', 'Sara', 'Documents', 'کار', 'جلسهٔ هفتگی.drawnix']);
+    // جهت پایهٔ هر بخش چپ‌به‌راست است تا پسوند در انتهای نام بماند، نه پیش از نام فارسی.
+    for (const part of Array.from(element.querySelectorAll('bdi'))) {
+      expect(part.getAttribute('dir')).toBe('ltr');
+    }
   });
 
   it('مسیر یونیکس', () => {

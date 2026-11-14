@@ -50,6 +50,29 @@ function Get-InstallLocation($Entry) {
   return $null
 }
 
+# Shortcuts (with their targets) under a folder. Shell.Application is used because the
+# older WScript.Shell COM object cannot open .lnk files with non-ANSI (Persian) names.
+function Get-Shortcuts([string]$Folder) {
+  $shellApp = New-Object -ComObject Shell.Application
+  $result = @()
+  foreach ($file in Get-ChildItem -LiteralPath $Folder -Filter '*.lnk' -Recurse) {
+    $target = $null
+    try {
+      $item = $shellApp.Namespace($file.DirectoryName).ParseName($file.Name)
+      if ($item -and $item.IsLink) { $target = $item.GetLink.Path }
+    } catch {
+      $target = "<unreadable: $($_.Exception.Message)>"
+    }
+    $result += [pscustomobject]@{ File = $file; Target = $target }
+  }
+  return $result
+}
+
+# File name as ASCII (code points) so that it survives any console encoding.
+function Format-Name([string]$Name) {
+  return (($Name.ToCharArray() | ForEach-Object { if ([int]$_ -lt 128) { [string]$_ } else { 'U+{0:X4}' -f [int]$_ } }) -join '')
+}
+
 function Stop-App {
   Get-Process -Name 'ZehnNegar' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
@@ -74,14 +97,18 @@ if ($Phase -eq 'install') {
   if ($entry.DisplayVersion -ne '1.0.0') { Fail "unexpected DisplayVersion: $($entry.DisplayVersion)" }
 
   # --- Start-menu shortcut pointing at the installed executable --------------------------
-  $shell = New-Object -ComObject WScript.Shell
   $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
-  $shortcuts = Get-ChildItem -Path $programs -Filter '*.lnk' -Recurse |
-    Where-Object { $shell.CreateShortcut($_.FullName).TargetPath -ieq $exe }
-  if (-not $shortcuts) { Fail "no Start-menu shortcut targets $exe" }
-  $shortcutName = [System.IO.Path]::GetFileNameWithoutExtension(($shortcuts | Select-Object -First 1).Name)
+  $all = Get-Shortcuts $programs
+  $shortcuts = @($all | Where-Object { $_.Target -ieq $exe })
+  if ($shortcuts.Count -eq 0) {
+    $listing = ($all | ForEach-Object { "$(Format-Name $_.File.Name) -> $($_.Target)" }) -join "`n"
+    Fail "no Start-menu shortcut targets $exe. Shortcuts found:`n$listing"
+  }
+  $shortcutName = [System.IO.Path]::GetFileNameWithoutExtension($shortcuts[0].File.Name)
   $expectedName = -join ([char[]](0x0630, 0x0647, 0x0646, 0x200C, 0x0646, 0x06AF, 0x0627, 0x0631))
-  if ($shortcutName -ne $expectedName) { Fail "Start-menu shortcut name is '$shortcutName', expected the Persian app name" }
+  if ($shortcutName -ne $expectedName) {
+    Fail "Start-menu shortcut name is '$(Format-Name $shortcutName)', expected the Persian app name '$(Format-Name $expectedName)'"
+  }
 
   # --- .drawnix association ---------------------------------------------------------------
   $progId = (Get-ItemProperty -Path 'HKCU:\Software\Classes\.drawnix' -ErrorAction SilentlyContinue).'(default)'
@@ -108,7 +135,7 @@ if ($Phase -eq 'install') {
 
   Add-Content -Path $env:GITHUB_ENV -Value "ZN_EXECUTABLE=$exe"
   $sizeMb = [math]::Round($installer.Length / 1MB, 1)
-  Write-Notice "installed to $location; installer $sizeMb MB; uninstall entry '$($entry.DisplayName)'; shortcut '$shortcutName'; .drawnix -> $progId; double-click launch OK"
+  Write-Notice "installed to $location; installer $sizeMb MB; uninstall entry '$($entry.DisplayName)'; shortcut '$(Format-Name $shortcutName)'; .drawnix -> $progId; double-click launch OK"
   exit 0
 }
 
@@ -129,9 +156,7 @@ for ($i = 0; $i -lt 60 -and (Test-Path $exe); $i++) { Start-Sleep -Seconds 1 }
 if (Test-Path $exe) { Fail "executable still present after uninstall: $exe" }
 if (Get-UninstallEntry) { Fail 'uninstall entry still present after uninstall' }
 $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
-$shell = New-Object -ComObject WScript.Shell
-$left = Get-ChildItem -Path $programs -Filter '*.lnk' -Recurse |
-  Where-Object { $shell.CreateShortcut($_.FullName).TargetPath -ieq $exe }
-if ($left) { Fail "Start-menu shortcut left behind: $($left.FullName)" }
+$left = @(Get-Shortcuts $programs | Where-Object { $_.Target -ieq $exe })
+if ($left.Count -gt 0) { Fail "Start-menu shortcut left behind: $(Format-Name $left[0].File.Name)" }
 
 Write-Notice 'uninstall removed the program files, the uninstall entry and the Start-menu shortcut'
