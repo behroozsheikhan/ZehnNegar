@@ -1,0 +1,62 @@
+# بسته‌بندی ویندوز (NSIS، x64). اجرا: npm run build && npm run pack:win
+appId: ir.zehnnegar.app
+productName: ZehnNegar
+copyright: "ZehnNegar contributors — based on Drawnix (MIT) © 2024 Drawnix"
+
+directories:
+  # پوشهٔ «build» پیش‌فرض electron-builder با خروجی build اشتباه گرفته می‌شود؛ منابع بسته‌بندی این‌جاست.
+  buildResources: resources-build
+  output: release
+
+files:
+  - out/**
+  - package.json
+  # از better-sqlite3 فقط کد جاوااسکریپت و باینری ویندوز x64 لازم است (نه سورس C++ و باینری سکوهای دیگر).
+  - "!node_modules/better-sqlite3/{deps,src,binding.gyp,README.md}"
+  - "!node_modules/better-sqlite3/prebuilds/*"
+  - node_modules/better-sqlite3/prebuilds/win32-x64.node
+  # node-addon-api فقط هنگام کامپایل لازم است.
+  - "!node_modules/node-addon-api/**"
+
+# ماژول نیتیو باید بیرون از asar باشد تا ویندوز بتواند آن را بارگذاری کند.
+asarUnpack:
+  - "**/*.node"
+
+# better-sqlite3 باینری آمادهٔ N-API دارد (مستقل از نسخهٔ Electron)؛ کامپایل دوباره لازم نیست
+# و بدون آن، ساخت به Visual Studio/Python وابسته نمی‌شود.
+npmRebuild: false
+
+# فقط بسته‌های زبان Chromium که برنامه استفاده می‌کند (فارسی و انگلیسی) — حدود ۴۰ مگابایت کمتر.
+electronLanguages:
+  - fa
+  - en-US
+
+fileAssociations:
+  - ext: drawnix
+    name: ZehnNegar Document
+    description: ZehnNegar mind map
+    role: Editor
+    icon: resources-build/icon.ico
+
+win:
+  icon: resources-build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ZehnNegar-Setup-${version}-x64.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  # نام میان‌بر در منوی شروع و میز کار فارسی است.
+  shortcutName: ذهن‌نگار
+  uninstallDisplayName: ذهن‌نگار (ZehnNegar) ${version}
+  installerIcon: resources-build/icon.ico
+  uninstallerIcon: resources-build/icon.ico
+  deleteAppDataOnUninstall: false
+
+publish: null

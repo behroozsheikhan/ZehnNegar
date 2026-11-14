@@ -2,7 +2,9 @@ import { type PlaitTextBoard, type RenderComponentRef, type TextProps } from '@p
 import type { PlaitBoard } from '@plait/core';
 import { createRoot } from 'react-dom/client';
 import { Text } from '@plait-board/react-text';
+import { Editor } from 'slate';
 import { ReactEditor } from 'slate-react';
+import { takeTypedText } from './typed-text';
 import type { ReactBoard } from './board';
 
 export const withReact = (board: PlaitBoard & PlaitTextBoard) => {
@@ -45,6 +47,12 @@ export const withReact = (board: PlaitBoard & PlaitTextBoard) => {
         if (readonly === true && newProps.readonly === false) {
           setTimeout(() => {
             ReactEditor.focus(currentEditor);
+            // نویسه‌هایی که پیش از فوکوس تایپ شده‌اند (شروع ویرایش با تایپ) درج می‌شوند؛
+            // چون کل متن انتخاب شده است، جایگزین متن قبلی می‌شوند.
+            const typed = takeTypedText(newBoard);
+            if (typed) {
+              Editor.insertText(currentEditor as unknown as Editor, typed);
+            }
           }, 100);
         } else if (readonly === false && newProps.readonly === true) {
           ReactEditor.blur(currentEditor);

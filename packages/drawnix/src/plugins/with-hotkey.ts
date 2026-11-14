@@ -89,7 +89,11 @@ export const buildDrawnixHotkeyPlugin = (
           event.preventDefault();
           return;
         }
-        if (!event.altKey && !event.metaKey && !event.ctrlKey) {
+        // اگر عنصری انتخاب شده باشد، تایپ کردن باید ویرایش متن همان عنصر را شروع کند
+        // (رفتار Plait)، نه این‌که ابزار عوض شود؛ وگرنه مثلاً نوشتن «ا» (کلید H) روی گرهٔ
+        // انتخاب‌شده ابزار «دست» را فعال می‌کرد.
+        const hasSelection = getSelectedElements(board).length > 0;
+        if (!hasSelection && !event.altKey && !event.metaKey && !event.ctrlKey) {
           // با صفحه‌کلید فارسی، event.key حرف فارسی است؛ کلید فیزیکی را ملاک می‌گیریم.
           const key = getLatinKey(event);
           if (key === 'h') {
@@ -129,17 +133,14 @@ export const buildDrawnixHotkeyPlugin = (
             event.preventDefault();
             return;
           }
-          if (key === 'a' && !isHotkey(['mod+a'])(event)) {
-            // will trigger editing text
-            if (getSelectedElements(board).length === 0) {
-              setCreationMode(board, BoardCreationMode.drawing);
-              BoardTransforms.updatePointerType(board, ArrowLineShape.straight);
-              updatePointer(ArrowLineShape.straight, {
-                lastArrowPointer: ArrowLineShape.straight,
-              });
-              event.preventDefault();
-              return;
-            }
+          if (key === 'a') {
+            setCreationMode(board, BoardCreationMode.drawing);
+            BoardTransforms.updatePointerType(board, ArrowLineShape.straight);
+            updatePointer(ArrowLineShape.straight, {
+              lastArrowPointer: ArrowLineShape.straight,
+            });
+            event.preventDefault();
+            return;
           }
           if (key === 'r' || key === 'o' || key === 't') {
             const keyToPointer = {

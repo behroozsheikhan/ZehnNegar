@@ -11,6 +11,7 @@ import {
   toViewBoxPoint,
 } from '@plait/core';
 import { useEventListener } from 'ahooks';
+import { hasPendingTypedText, isPrintableKey, queueTypedText } from '../plugins/typed-text';
 
 const useBoardPluginEvent = (
   board: PlaitBoard,
@@ -95,6 +96,12 @@ const useBoardPluginEvent = (
   });
 
   useEventListener('keydown', (event) => {
+    // ویرایش با تایپ شروع شده ولی ویرایشگر هنوز فوکوس نگرفته: نویسه‌ها را نگه می‌داریم.
+    if (hasPendingTypedText(board) && isPrintableKey(event)) {
+      queueTypedText(board, event.key);
+      event.preventDefault();
+      return;
+    }
     board.globalKeyDown(event);
     if (
       PlaitBoard.isFocus(board) &&
@@ -102,6 +109,10 @@ const useBoardPluginEvent = (
       !hasInputOrTextareaTarget(event.target)
     ) {
       board.keyDown(event);
+      if (PlaitBoard.hasBeenTextEditing(board) && isPrintableKey(event)) {
+        // همین کلید ویرایش متن را آغاز کرد؛ Plait خودِ نویسه را دور می‌ریزد.
+        queueTypedText(board, event.key);
+      }
     }
   });
 

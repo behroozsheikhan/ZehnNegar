@@ -75,6 +75,10 @@ const MarkdownToDrawnix = () => {
         }
         const mind = ret;
         mind.points = [[0, 0]];
+        // در رابط فارسی شاخه‌ها به سمت چپ باز می‌شوند (جهت خواندن).
+        if (language === 'fa' && mind.layout === 'right') {
+          mind.layout = 'left' as typeof mind.layout;
+        }
         if (mind) {
           setValue([mind]);
           setError(null);
@@ -85,14 +89,18 @@ const MarkdownToDrawnix = () => {
     };
     convertMarkdown();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deferredText, markdownToDrawnixLib]);
+  }, [deferredText, markdownToDrawnixLib, language]);
 
   const insertToBoard = () => {
     if (!value.length) {
       return;
     }
     const boardContainerRect = PlaitBoard.getBoardContainer(board).getBoundingClientRect();
-    const focusPoint = [boardContainerRect.width / 4, boardContainerRect.height / 2 - 20];
+    // ریشه در فارسی سمت راست صفحه قرار می‌گیرد تا شاخه‌ها به چپ جا داشته باشند.
+    const focusPoint = [
+      language === 'fa' ? (boardContainerRect.width * 3) / 4 : boardContainerRect.width / 4,
+      boardContainerRect.height / 2 - 20,
+    ];
     const zoom = board.viewport.zoom;
     const origination = getViewportOrigination(board);
     const focusX = origination![0] + focusPoint[0] / zoom;
