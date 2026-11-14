@@ -240,23 +240,59 @@ export async function boardTexts(page: Page): Promise<string[]> {
 }
 
 /**
- * یک نقشهٔ ذهنی تازه در مرکز تخته می‌سازد و متن ریشه را می‌نویسد.
- * (ابزار نقشهٔ ذهنی با کلید M، کلیک برای ساخت، دوبارکلیک برای ویرایش.)
+ * با ابزار نقشهٔ ذهنی (کلید M) یک گرهٔ ریشه وسط تخته می‌گذارد؛ همان کاری که کاربر می‌کند:
+ * پیش‌نمایش گره دنبال نشانگر می‌آید و با کلیک سر جایش می‌نشیند. گرهٔ تازه انتخاب‌شده است.
  */
-export async function createMindMap(page: Page, text: string): Promise<{ x: number; y: number }> {
+export async function placeMindNode(page: Page): Promise<{ x: number; y: number }> {
   const center = await boardCenter(page);
   // میان‌برهای ابزار فقط وقتی نشانگر روی تخته است کار می‌کنند.
-  await page.mouse.move(center.x - 40, center.y - 20);
-  await page.mouse.move(center.x, center.y);
+  await page.mouse.move(center.x - 60, center.y - 40);
   await page.keyboard.press('m');
-  await page.mouse.click(center.x, center.y);
+  await page.mouse.move(center.x, center.y, { steps: 5 });
+  await expect(page.locator('[plait-mind-temporary]')).toHaveCount(1);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator('[plait-mind-temporary]')).toHaveCount(0);
   await expect(page.locator('.plait-text-container')).toHaveCount(1);
-  await page.keyboard.press('v');
+  // نوار ابزار شناور یعنی گره انتخاب شده است.
+  await expect(page.locator('.popup-toolbar')).toBeVisible();
+  return center;
+}
+
+/** یک نقشهٔ ذهنی با ریشه‌ای به متن داده‌شده می‌سازد و از حالت ویرایش بیرون می‌آید. */
+export async function createMindMap(page: Page, text: string): Promise<{ x: number; y: number }> {
+  const center = await placeMindNode(page);
   await page.mouse.dblclick(center.x, center.y);
   await typeInEditor(page, text);
   await leaveEditing(page);
   await expect.poll(() => boardTexts(page)).toContain(text);
   return center;
+}
+
+/** کلیدهای «سلام» روی صفحه‌کلید فارسی: حرف فارسی + کلید فیزیکی + کد مجازی ویندوز. */
+export const SALAM_KEYS: [string, string, number][] = [
+  ['س', 'KeyS', 83],
+  ['ل', 'KeyG', 71],
+  ['ا', 'KeyH', 72],
+  ['م', 'KeyL', 76],
+];
+
+/** شبیه‌سازی صفحه‌کلید فارسی: key حرف فارسی و code کلید فیزیکی است (مثل ویندوز). */
+export async function pressPersianKeys(page: Page, keys: [string, string, number][]): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  for (const [key, code, windowsVirtualKeyCode] of keys) {
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code,
+      text: key,
+      unmodifiedText: key,
+      windowsVirtualKeyCode,
+    });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+    await page.waitForTimeout(50);
+  }
+  await cdp.detach();
 }
 
 /** منتظر می‌ماند تا ویرایشگر متن فوکوس بگیرد و سپس متن را (جایگزین متن انتخاب‌شده) می‌نویسد. */

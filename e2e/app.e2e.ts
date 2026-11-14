@@ -5,6 +5,9 @@ import {
   boardTexts,
   clickNativeMenu,
   createMindMap,
+  placeMindNode,
+  pressPersianKeys,
+  SALAM_KEYS,
   dialogCalls,
   expect,
   leaveEditing,
@@ -87,11 +90,30 @@ test.describe('شروع برنامه', () => {
     const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
     expect(fontFamily).toContain('Vazirmatn');
 
-    const resources = await page.evaluate(() =>
-      performance.getEntriesByType('resource').map((entry) => entry.name)
-    );
-    expect(resources.length).toBeGreaterThan(0);
-    expect(resources.filter((name) => !name.startsWith('file:'))).toEqual([]);
+    // همهٔ اسکریپت‌ها، شیوه‌نامه‌ها و قلم‌ها از درون بستهٔ برنامه می‌آیند.
+    const assets = await page.evaluate(() => {
+      const urls = Array.from(document.querySelectorAll('script[src], link[href]')).map(
+        (element) => (element as HTMLScriptElement).src || (element as HTMLLinkElement).href
+      );
+      const loadedFonts = Array.from(document.fonts)
+        .filter((face) => face.status === 'loaded')
+        .map((face) => face.family.replace(/["']/g, ''));
+      return { urls, loadedFonts, base: document.baseURI };
+    });
+    expect(assets.base.startsWith('file://')).toBe(true);
+    expect(assets.urls.length).toBeGreaterThan(0);
+    expect(assets.urls.filter((url) => !url.startsWith('file://'))).toEqual([]);
+    expect(assets.loadedFonts).toContain('Vazirmatn');
+
+    // بارگذاری دوباره: هیچ درخواستی به شبکه نمی‌رود.
+    const remote: string[] = [];
+    page.on('request', (request) => {
+      if (/^(https?|wss?|ftp):/i.test(request.url())) remote.push(request.url());
+    });
+    await page.reload();
+    await page.getByTestId('app-root').waitFor();
+    await createMindMap(page, 'بدون اینترنت');
+    expect(remote).toEqual([]);
   });
 
   test('renderer به Node دسترسی ندارد و فقط window.api را می‌بیند', async ({ launch }) => {
@@ -151,39 +173,46 @@ test.describe('نقشهٔ ذهنی و پرونده', () => {
     expect(await overflowingElements(second.page, '[data-testid="recent-dialog"]')).toEqual([]);
   });
 
-  test('تایپ فارسی روی گرهٔ انتخاب‌شده ویرایش را شروع می‌کند و حرف اول گم نمی‌شود', async ({ launch }) => {
+  test('تایپ فارسی روی گرهٔ تازه ویرایش را شروع می‌کند و حرف اول گم نمی‌شود', async ({ launch }) => {
     const { page } = await launch();
-    const center = await createMindMap(page, 'موضوع');
-    await page.mouse.click(center.x, center.y);
 
-    // شبیه‌سازی صفحه‌کلید فارسی: key حرف فارسی و code کلید فیزیکی است.
-    const cdp = await page.context().newCDPSession(page);
-    const keys: [string, string, number][] = [
-      ['س', 'KeyS', 83],
-      ['ل', 'KeyG', 71],
-      ['ا', 'KeyH', 72],
-      ['م', 'KeyL', 76],
-    ];
-    for (const [key, code, windowsVirtualKeyCode] of keys) {
-      await cdp.send('Input.dispatchKeyEvent', {
-        type: 'keyDown',
-        key,
-        code,
-        text: key,
-        unmodifiedText: key,
-        windowsVirtualKeyCode,
-      });
-      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
-      await page.waitForTimeout(50);
-    }
+    // گرهٔ تازه انتخاب‌شده است؛ نوشتن با صفحه‌کلید فارسی باید متن آن را عوض کند، نه ابزار را
+    // (کلید «ا» همان H فیزیکی است که میان‌بر ابزار «دست» است).
+    const center = await placeMindNode(page);
+    await pressPersianKeys(page, SALAM_KEYS);
     await page.keyboard.press('Enter');
     await expect.poll(() => boardTexts(page)).toEqual(['سلام']);
+    await expect(page.locator('.plait-board-container')).toHaveClass(/pointer-selection/);
 
     // شاخهٔ تازه با Tab؛ متن فارسی و ارقام فارسی همان‌طور که نوشته شده می‌ماند.
     await page.keyboard.press('Tab');
     await typeInEditor(page, 'هزینه: ۱۲ میلیون');
     await leaveEditing(page);
     await expect.poll(async () => (await boardTexts(page)).sort()).toEqual(['سلام', 'هزینه: ۱۲ میلیون'].sort());
+
+    // انتخاب دوباره با کلیک و بازنویسی متن با تایپ مستقیم.
+    await page.mouse.click(center.x, center.y);
+    await expect(page.locator('.popup-toolbar')).toBeVisible();
+    await pressPersianKeys(page, SALAM_KEYS.slice(0, 2));
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => (await boardTexts(page)).sort()).toEqual(['سل', 'هزینه: ۱۲ میلیون'].sort());
+  });
+
+  test('انصراف از ابزار نقشهٔ ذهنی گرهٔ ناخواسته نمی‌سازد', async ({ launch }) => {
+    const { page } = await launch();
+    const center = await boardCenter(page);
+    await page.mouse.move(center.x - 60, center.y - 40);
+    await page.keyboard.press('m');
+    await page.mouse.move(center.x, center.y, { steps: 5 });
+    await expect(page.locator('[plait-mind-temporary]')).toHaveCount(1);
+
+    await page.keyboard.press('v');
+    await page.mouse.move(center.x + 80, center.y + 60, { steps: 5 });
+    await expect(page.locator('[plait-mind-temporary]')).toHaveCount(0);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    expect(await boardTexts(page)).toEqual([]);
   });
 
   test('باز کردن پرونده با دوبارکلیک (آرگومان خط فرمان)', async ({ launch, workDir }) => {
