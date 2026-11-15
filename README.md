@@ -4,6 +4,13 @@
 
 تخته‌سفید و **نقشهٔ ذهنی** فارسی برای ویندوز — کاملاً آفلاین، با رابط راست‌به‌چپ و قلم وزیرمتن.
 
+---
+
+<img width="1038" height="688" alt="ZehnNegar-Screenshot" src="https://github.com/user-attachments/assets/44c532cb-654a-4307-b9ce-ea43f3e0c2a2" />
+
+---
+
+
 ذهن‌نگار نسخهٔ دسکتاپ و فارسی‌شدهٔ پروژهٔ متن‌باز [Drawnix](https://github.com/plait-board/drawnix) است
 (مجوز MIT). همهٔ داده‌ها فقط روی رایانهٔ خودتان می‌ماند و برنامه هیچ ارتباطی با اینترنت ندارد.
 
